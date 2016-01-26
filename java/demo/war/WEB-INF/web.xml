@@ -8,9 +8,17 @@
     <servlet-name>PhoneNumberParser</servlet-name>
     <servlet-class>com.google.phonenumbers.PhoneNumberParserServlet</servlet-class>
   </servlet>
+  <servlet>
+    <servlet-name>PhoneNumberParserLite</servlet-name>
+    <servlet-class>com.google.phonenumbers.PhoneNumberParserLiteServlet</servlet-class>
+  </servlet>
   <servlet-mapping>
     <servlet-name>PhoneNumberParser</servlet-name>
     <url-pattern>/phonenumberparser</url-pattern>
+  </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>PhoneNumberParserLite</servlet-name>
+    <url-pattern>/phonenumberparserlite</url-pattern>
   </servlet-mapping>
   <welcome-file-list>
     <welcome-file>phonenumberparser.jsp</welcome-file>

@@ -3,6 +3,7 @@
 <project name="libphonenumber" default="compile">
   <property name="libphonenumber.src.dir" value="libphonenumber/src"/>
   <property name="libphonenumber.test.dir" value="libphonenumber/test"/>
+  <property name="libphonelite.src.dir" value="libphonelite/src"/>
   <property name="carrier.src.dir" value="carrier/src"/>
   <property name="carrier.test.dir" value="carrier/test"/>
   <property name="geocoder.src.dir" value="geocoder/src"/>
@@ -177,6 +178,19 @@
     </exec>
   </target>
 
+  <target name="build-simplified-metadata">
+    <exec executable="java">
+      <arg value="-jar" />
+      <arg value="${build.tools.jar}"/>
+      <arg value="BuildMetadataSimplifiedFromXml"/>
+      <arg value="--input-file=${resources.dir}/PhoneNumberMetadata.xml"/>
+      <arg value="--output-dir=${libphonelite.src.dir}/com/headuck/phonenumbers"/>
+      <arg value="--data-prefix=data/PhoneNumberMetadataSimplified"/>
+      <arg value="--mapping-class=CountryCodeToRegionCodeMap"/>
+      <arg value="--copyright=2010"/>
+    </exec>
+  </target>
+
   <target name="build-js-metadata">
     <exec executable="java">
       <arg value="-jar" />
@@ -203,9 +217,9 @@
   </target>
 
   <target name="compile" description="Compile Java source."
-          depends="build-phone-metadata,build-short-metadata,build-alternate-metadata,build-carrier-data,build-geo-data,build-timezones-data">
+          depends="build-phone-metadata,build-short-metadata,build-alternate-metadata,build-carrier-data,build-geo-data,build-timezones-data,build-simplified-metadata">
     <mkdir dir="${classes.dir}"/>
-    <javac srcdir="${libphonenumber.src.dir};${carrier.src.dir};${geocoder.src.dir};${prefixmapper.src.dir}"
+    <javac srcdir="${libphonenumber.src.dir};${libphonelite.src.dir};${carrier.src.dir};${geocoder.src.dir};${prefixmapper.src.dir}"
            destdir="${classes.dir}" classpathref="classpath" includeAntRuntime="false"/>
     <javac srcdir="${libphonenumber.test.dir};${carrier.test.dir};${geocoder.test.dir};${prefixmapper.test.dir}"
            destdir="${classes.dir}" classpathref="classpath" debug="on"
@@ -222,11 +236,25 @@
         <exclude name="**/PhoneNumberTo*"/>
         <exclude name="**/geocoding/*"/>
         <exclude name="**/prefixmapper/*"/>
+        <exclude name="com/headuck/phonenumbers/*"/>
       </fileset>
       <fileset dir="${libphonenumber.src.dir}">
         <include name="**/PhoneNumberMetadataProto*"/>
         <include name="**/PhoneNumberAlternateFormatsProto*"/>
         <include name="**/ShortNumberMetadataProto*"/>
+      </fileset>
+    </jar>
+    <jar destfile="${jar.dir}/libphonelite.jar">
+      <fileset dir="${classes.dir}">
+        <include name="com/headuck/phonenumbers/*.class"/>
+        <exclude name="**/*Test*"/>
+        <exclude name="**/BuildMetadata*"/>
+        <exclude name="**/PhoneNumberTo*"/>
+        <exclude name="**/geocoding/*"/>
+        <exclude name="**/prefixmapper/*"/>
+      </fileset>
+      <fileset dir="${libphonelite.src.dir}">
+        <include name="**/PhoneNumberMetadataSimplified*"/>
       </fileset>
     </jar>
     <jar destfile="${jar.dir}/carrier-mapper.jar">

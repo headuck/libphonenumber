@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.googlecode.libphonenumber</groupId>
+  <artifactId>libphonelite</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <url>https://github.com/googlei18n/libphonenumber/</url>
+
+  <parent>
+    <groupId>com.googlecode.libphonenumber</groupId>
+    <artifactId>libphonenumber-parent</artifactId>
+    <version>7.2.3-SNAPSHOT</version>
+  </parent>
+
+  <build>
+    <sourceDirectory>src</sourceDirectory>
+    <resources>
+      <resource>
+        <directory>src/com/headuck/phonenumbers/data</directory>
+        <targetPath>com/headuck/phonenumbers/data</targetPath>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <excludes>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.4.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

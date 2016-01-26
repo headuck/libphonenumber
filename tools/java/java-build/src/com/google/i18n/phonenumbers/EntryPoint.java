@@ -30,6 +30,7 @@ public class EntryPoint {
     boolean status = new CommandDispatcher(args, new Command[] {
       new BuildMetadataJsonFromXml(),
       new BuildMetadataProtoFromXml(),
+      new BuildMetadataSimplifiedFromXml(),
       new GeneratePhonePrefixDataEntryPoint(),
       new GenerateTimeZonesMapDataEntryPoint(),
     }).start();

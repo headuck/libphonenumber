@@ -1,0 +1,25 @@
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.swp
+
+**/target/**
+.gradle
+/local.properties
+.idea
+#/.idea/workspace.xml
+#/.idea/libraries
+.DS_Store
+/build
+
+# Android Studio
+*.iml
+
+# more caches and things from deploy #
+war/WEB-INF/deploy/
+war/WEB-INF/classes/
+
+# Auto generated
+dependency-reduced-pom.xml
