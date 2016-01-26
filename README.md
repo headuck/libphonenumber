@@ -1,6 +1,9 @@
 # What is it?
 
-Google's common Java, C++ and JavaScript library for parsing, formatting, storing and validating international phone numbers. The Java version is optimized for running on smartphones, and is used by the Android framework since 4.0 (Ice Cream Sandwich).
+Google's common Java, C++ and JavaScript library for parsing, formatting, and validating international phone numbers. The Java version is optimized for running on smartphones, and is used by the Android framework since 4.0 (Ice Cream Sandwich).
+
+# Want to report an issue?
+If you want to report an issue, or to contribute to the project, please read the guidelines [here] (https://github.com/googlei18n/libphonenumber/blob/master/CONTRIBUTING.md) first.
 
 # Highlights of functionality
   * Parsing/formatting/validating phone numbers for all countries/regions of the world.
@@ -14,7 +17,7 @@ Google's common Java, C++ and JavaScript library for parsing, formatting, storin
   * ` PhoneNumberOfflineGeocoder ` - provides geographical information related to a phone number.
   * ` PhoneNumberToCarrierMapper ` - provides carrier information related to a phone number.
 
-# Demo (v7.2.2)
+# Demo (v7.2.3)
 [Java](http://libphonenumber.appspot.com/)
 
 [JavaScript](https://rawgit.com/googlei18n/libphonenumber/master/javascript/i18n/phonenumbers/demo-compiled.html)
@@ -23,10 +26,6 @@ Google's common Java, C++ and JavaScript library for parsing, formatting, storin
 To include the code in your application, either integrate with Maven or download the latest Jars from the Maven repository:
 
 http://repo1.maven.org/maven2/com/googlecode/libphonenumber/libphonenumber/
-
-# Contributions
- If you are considering to contribute to the project, please read the instructions [here]
- (https://github.com/googlei18n/libphonenumber/wiki/ContributeToTheProject) first.
 
 # Quick Examples
 Let's say you have a string representing a phone number from Switzerland. This is how you parse/normalize it into a ` PhoneNumber ` object:
