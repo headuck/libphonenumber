@@ -87,7 +87,7 @@ public class PhoneNumberParserLiteServlet extends HttpServlet {
     }
 
     StringBuilder output;
-    if (fileContents.length() == 0) {
+    if (fileContents == null || fileContents.length() == 0) {
       output = getOutputForSingleNumber(phoneNumber, defaultCountry, languageCode, regionCode);
       resp.setContentType("text/html");
       resp.setCharacterEncoding("UTF-8");
