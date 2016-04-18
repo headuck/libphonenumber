@@ -17,7 +17,7 @@ If you want to report an issue, or to contribute to the project, please read the
   * ` PhoneNumberOfflineGeocoder ` - provides geographical information related to a phone number.
   * ` PhoneNumberToCarrierMapper ` - provides carrier information related to a phone number.
 
-# Demo (v7.2.8)
+# Demo (v7.3.0)
 [Java](http://libphonenumber.appspot.com/)
 
 [JavaScript](https://rawgit.com/googlei18n/libphonenumber/master/javascript/i18n/phonenumbers/demo-compiled.html)
@@ -48,7 +48,7 @@ At this point, swissNumberProto contains:
 }
 ```
 
-` PhoneNumber ` is a class that is auto-generated from the phonenumber.proto with necessary modifications for efficiency. For details on the meaning of each field, refer to https://github.com/googlei18n/test/blob/master/resources/phonenumber.proto
+` PhoneNumber ` is a class that is auto-generated from the phonenumber.proto with necessary modifications for efficiency. For details on the meaning of each field, refer to https://github.com/googlei18n/libphonenumber/blob/master/resources/phonenumber.proto
 
 Now let us validate whether the number is valid:
 ```java
@@ -105,7 +105,7 @@ System.out.println(carrierMapper.getNameForNumber(swissMobileNumber, Locale.ENGL
 ---
 
 
-More examples on how to use the library can be found in the unittests at https://github.com/googlei18n/test/tree/master/java/libphonenumber/test/com/google/i18n/phonenumbers
+More examples on how to use the library can be found in the unittests at https://github.com/googlei18n/libphonenumber/tree/master/java/libphonenumber/test/com/google/i18n/phonenumbers
 
 # Known Ports
 Several people are porting the phone number library to other languages. Here are some we know about. Note that they are done on voluntary basis by developers outside our project, so we cannot guarantee their quality.
