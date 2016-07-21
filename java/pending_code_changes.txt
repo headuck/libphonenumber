@@ -1,2 +1,3 @@
 Code changes:
- - Make C++ code forward compatible with an upcoming RE2 change.
+ - Simplify concurrent metadata loading in MultiFileMetadataSourceImpl and
+   reduce points of contention.

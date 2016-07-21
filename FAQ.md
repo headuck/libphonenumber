@@ -34,6 +34,14 @@ phone call with a verification code). This is not technically feasible without
 such a verification step given the complicated international world we live in,
 with varying standardization practices in different regions.
 
+#### But my dialled number connected, so isn't it valid?
+
+Not necessarily. In some countries extra digits at the end are ignored. For
+example, dialling `1800 MICROSOFT` in the US connects to `+1 (800) MIC-ROSO`.
+Moreover, during renumbering transitions, e.g. when all numbers are getting an
+extra `9` added to the front, some carriers will "fix" old numbers long after
+they're no longer working for the majority.
+
 ### When should I use isValidNumberForRegion?
 
 Rarely! Many people have phone numbers that do not belong to the country they
@@ -59,6 +67,14 @@ land-lines, to receive SMSs.
 Some number ranges are explicitly defined as being for fixed-line or mobile
 phones. We even represent ranges defined as being "Mostly land-line" in this
 way.
+
+### What is mobile number portability?
+
+The ability to keep your mobile phone number when changing carriers. To see whether a region supports mobile number portability use [isMobileNumberPortableRegion](https://github.com/googlei18n/libphonenumber/blob/master/java/libphonenumber/src/com/google/i18n/phonenumbers/PhoneNumberUtil.java#L3275).
+
+### Since it's possible to change the carrier for a phone number, how is the data kept up-to-date?
+
+Not all regions support mobile number portability. For those that don't, we return the carrier when available. For those that do, we return the original carrier for the supplied number.
 
 ### What about M2M (machine to machine) numbers?
 

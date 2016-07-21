@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.googlecode.libphonenumber</groupId>
   <artifactId>libphonenumber-parent</artifactId>
-  <version>7.4.2-SNAPSHOT</version>
+  <version>7.4.6-SNAPSHOT</version>
   <packaging>pom</packaging>
   <url>https://github.com/googlei18n/libphonenumber/</url>
 
@@ -93,7 +93,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.12</version>
         <configuration>
-          <forkMode>never</forkMode>
+          <forkCount>0</forkCount>
           <includes>
             <include>**/*Test.java</include>
           </includes>
