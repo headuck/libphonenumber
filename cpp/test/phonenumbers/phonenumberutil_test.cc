@@ -230,6 +230,11 @@ TEST_F(PhoneNumberUtilTest, GetInstanceLoadUSMetadata) {
             metadata->general_desc().possible_number_pattern());
   EXPECT_TRUE(Equals(metadata->general_desc(), metadata->fixed_line()));
   EXPECT_EQ("\\d{10}", metadata->toll_free().possible_number_pattern());
+  EXPECT_EQ(1, metadata->general_desc().possible_length_size());
+  EXPECT_EQ(10, metadata->general_desc().possible_length(0));
+  // Possible lengths are the same as the general description, so aren't stored
+  // separately in the toll free element as well.
+  EXPECT_EQ(0, metadata->toll_free().possible_length_size());
   EXPECT_EQ("900\\d{7}", metadata->premium_rate().national_number_pattern());
   // No shared-cost data is available, so it should be initialised to "NA".
   EXPECT_EQ("NA", metadata->shared_cost().national_number_pattern());
@@ -247,8 +252,14 @@ TEST_F(PhoneNumberUtilTest, GetInstanceLoadDEMetadata) {
   EXPECT_EQ("900", metadata->number_format(5).leading_digits_pattern(0));
   EXPECT_EQ("(\\d{3})(\\d{3,4})(\\d{4})",
             metadata->number_format(5).pattern());
+  EXPECT_EQ(2, metadata->general_desc().possible_length_local_only_size());
+  EXPECT_EQ(8, metadata->general_desc().possible_length_size());
+  // Nothing is present for fixed-line, since it is the same as the general
+  // desc, so for efficiency reasons we don't store an extra value.
+  EXPECT_EQ(0, metadata->fixed_line().possible_length_size());
+  EXPECT_EQ(2, metadata->mobile().possible_length_size());
   EXPECT_EQ("$1 $2 $3", metadata->number_format(5).format());
-  EXPECT_EQ("(?:[24-6]\\d{2}|3[03-9]\\d|[789](?:[1-9]\\d|0[2-9]))\\d{1,8}",
+  EXPECT_EQ("(?:[24-6]\\d{2}|3[03-9]\\d|[789](?:0[2-9]|[1-9]\\d))\\d{1,8}",
             metadata->fixed_line().national_number_pattern());
   EXPECT_EQ("\\d{2,14}", metadata->fixed_line().possible_number_pattern());
   EXPECT_EQ("30123456", metadata->fixed_line().example_number());
@@ -1165,7 +1176,7 @@ TEST_F(PhoneNumberUtilTest, FormatNumberForMobileDialing) {
   // numbers are always output in international format, but short numbers are
   // in national format.
   test_number.set_country_code(1);
-  test_number.set_national_number(6502530000LL);
+  test_number.set_national_number(6502530000L);
   phone_util_.FormatNumberForMobileDialing(
       test_number, RegionCode::US(), false, &formatted_number);
   EXPECT_EQ("+16502530000", formatted_number);
@@ -1341,15 +1352,21 @@ TEST_F(PhoneNumberUtilTest, GetLengthOfGeographicalAreaCode) {
   number.set_national_number(2070313000ULL);
   EXPECT_EQ(2, phone_util_.GetLengthOfGeographicalAreaCode(number));
 
-  // A UK mobile phone, which has no area code.
+  // A mobile number in the UK does not have an area code (by default, mobile
+  // numbers do not, unless they have been added to our list of exceptions).
   number.set_country_code(44);
-  number.set_national_number(7123456789ULL);
+  number.set_national_number(7912345678ULL);
   EXPECT_EQ(0, phone_util_.GetLengthOfGeographicalAreaCode(number));
 
   // Google Buenos Aires, which has area code "11".
   number.set_country_code(54);
   number.set_national_number(1155303000ULL);
   EXPECT_EQ(2, phone_util_.GetLengthOfGeographicalAreaCode(number));
+
+  // A mobile number in Argentina also has an area code.
+  number.set_country_code(54);
+  number.set_national_number(91187654321);
+  EXPECT_EQ(3, phone_util_.GetLengthOfGeographicalAreaCode(number));
 
   // Google Sydney, which has area code "2".
   number.set_country_code(61);
@@ -1373,6 +1390,12 @@ TEST_F(PhoneNumberUtilTest, GetLengthOfGeographicalAreaCode) {
   number.set_country_code(800);
   number.set_national_number(12345678ULL);
   EXPECT_EQ(0, phone_util_.GetLengthOfGeographicalAreaCode(number));
+
+  // A mobile number from China is geographical, but does not have an area code.
+  PhoneNumber cn_mobile;
+  cn_mobile.set_country_code(86);
+  cn_mobile.set_national_number(18912341234ULL);
+  EXPECT_EQ(0, phone_util_.GetLengthOfGeographicalAreaCode(cn_mobile));
 }
 
 TEST_F(PhoneNumberUtilTest, GetLengthOfNationalDestinationCode) {
@@ -1392,9 +1415,9 @@ TEST_F(PhoneNumberUtilTest, GetLengthOfNationalDestinationCode) {
   number.set_national_number(2070313000ULL);
   EXPECT_EQ(2, phone_util_.GetLengthOfNationalDestinationCode(number));
 
-  // A UK mobile phone, which has NDC "7123"
+  // A UK mobile phone, which has NDC "7912"
   number.set_country_code(44);
-  number.set_national_number(7123456789ULL);
+  number.set_national_number(7912345678ULL);
   EXPECT_EQ(4, phone_util_.GetLengthOfNationalDestinationCode(number));
 
   // Google Buenos Aires, which has NDC "11".
@@ -1444,6 +1467,13 @@ TEST_F(PhoneNumberUtilTest, GetLengthOfNationalDestinationCode) {
   number.set_country_code(800);
   number.set_national_number(12345678ULL);
   EXPECT_EQ(4, phone_util_.GetLengthOfNationalDestinationCode(number));
+
+  // A mobile number from China is geographical, but does not have an area code:
+  // however it still can be considered to have a national destination code.
+  PhoneNumber cn_mobile;
+  cn_mobile.set_country_code(86);
+  cn_mobile.set_national_number(18912341234ULL);
+  EXPECT_EQ(3, phone_util_.GetLengthOfNationalDestinationCode(cn_mobile));
 }
 
 TEST_F(PhoneNumberUtilTest, GetCountryMobileToken) {
