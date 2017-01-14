@@ -16,9 +16,8 @@
 
 package com.google.i18n.phonenumbers;
 
-import com.google.i18n.phonenumbers.nano.Phonemetadata;
-import com.google.i18n.phonenumbers.nano.Phonemetadata.PhoneMetadata;
-import com.google.i18n.phonenumbers.nano.Phonemetadata.PhoneMetadataCollection;
+import com.google.i18n.phonenumbers.Phonemetadata.PhoneMetadata;
+import com.google.i18n.phonenumbers.Phonemetadata.PhoneMetadataCollection;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -37,7 +36,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Tool to convert phone number metadata from the XML format to protocol buffer format.
+ * Tool to convert phone number metadata from the XML format to simplified format.
  *
  * Based on the name of the {@code inputFile}, some optimization and removal of unnecessary metadata
  * is carried out to reduce the size of the output file.
@@ -138,7 +137,7 @@ public class BuildMetadataSimplifiedFromXml extends Command {
 
     try {
       PhoneMetadataCollection metadataCollection =
-          BuildMetadataFromXml.buildPhoneMetadataCollection(inputFile, true);
+          BuildMetadataFromXml.buildPhoneMetadataCollection(inputFile, true, false);
         FileOutputStream os = null;
         try {
             os = new FileOutputStream(new File(filePrefix));
@@ -333,14 +332,17 @@ public class BuildMetadataSimplifiedFromXml extends Command {
   }
 
 
-    // Writes a PhoneMetadataCollection in JSON format.
+    // Writes a PhoneMetadataCollection in custom and simplified format.
     private static void writeCountryToMetadataMap(PhoneMetadataCollection metadataCollection,
                                                   FileOutputStream os) throws IOException {
         // writer.write("{\n");
         // boolean isFirstTimeInLoop = true;
         RegexBufBuilder jsArrayBuilder = new RegexBufBuilder();
+        
         int lastpos, ret;
-        int len = metadataCollection.metadata.length;
+        
+        // First 2 bytes: length of metadata list
+        int len = metadataCollection.getMetadataList().size();
 
         byte[] lenBuf = new byte [2];
 
@@ -354,15 +356,15 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         lastpos = 0;
 
         int idx = 0;
-        for (PhoneMetadata metadata : metadataCollection.metadata) {
+        for (PhoneMetadata metadata : metadataCollection.getMetadataList()) {
 
-            String key = metadata.id;
+            String key = metadata.getId();
             // For non-geographical country calling codes (e.g. +800), use the country calling codes
             // instead of the region code as key in the map.
             if (key.equals("001")) {
-                // key = Integer.toString(metadata.countryCode);
-                lenBuf[0] = (byte) (metadata.countryCode >>> 8);
-                lenBuf[1] = (byte) (metadata.countryCode % 256);
+                int ccode = metadata.getCountryCode();
+                lenBuf[0] = (byte) (ccode >>> 8);
+                lenBuf[1] = (byte) (ccode % 256);
             } else {
                 lenBuf[0] = (byte) (key.charAt(0));
                 lenBuf[1] = (byte) (key.charAt(1));
@@ -393,8 +395,8 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         }
         //writer.write ("\n");
         byte[] encodedString = jsArrayBuilder.encodeString();
-        os.write(encodedString, 0, jsArrayBuilder.byteBufIdx+1);
-        System.out.println("Buffer length written = " + (jsArrayBuilder.byteBufIdx+1) );
+        os.write(encodedString, 0, jsArrayBuilder.encodedLength());
+        System.out.println("Buffer length written = " + jsArrayBuilder.encodedLength() );
 
         // Restore Buffer in string form and compare with jsArrayBuilder
         String outputStr = Utils.expandBuf(idxbuf, encodedString);
@@ -423,24 +425,41 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         // missing 1
         jsArrayBuilder.append(null);
         // optional string national_number_pattern = 2;
-        if (!desc.nationalNumberPattern.equals("")) {
-            jsArrayBuilder.append(code, desc.nationalNumberPattern);
+        if (desc.hasNationalNumberPattern()) {
+            jsArrayBuilder.append(code, desc.getNationalNumberPattern());
         } else {
             jsArrayBuilder.append(null);
         }
-        // optional string possible_number_pattern = 3;
-        // Only for general_desc, with code set to 0
+        // missing 3
+        // jsArrayBuilder.append(null);
+
+        // optional:
+        // Only for general_desc (code == 1), with output field code set to 0
+        // output the possible lengths for the pattern 
+        // encoded in a bit mask, 1 for corresponding bit position
         if (code == 1) {
-            if (!desc.possibleNumberPattern.equals("")) {
-                jsArrayBuilder.append(0, desc.possibleNumberPattern);
+            int possibleLengthSize = desc.getPossibleLengthCount();
+            int bits = 0;
+            if (possibleLengthSize > 0) {
+                for (int i = 0; i < possibleLengthSize; i++) {
+                    int possibleLen = desc.getPossibleLength(i);
+                    bits |= 1 << possibleLen;
+                }
+                jsArrayBuilder.append(0, Integer.toString(bits));
+            // if (!desc.possibleNumberPattern.equals("")) {
+            //     jsArrayBuilder.append(0, desc.possibleNumberPattern);
+
             } else {
                 jsArrayBuilder.append(null);
             }
         }
+
+
         // missing 4
         jsArrayBuilder.append(null);
         // missing 5
         jsArrayBuilder.append(null);
+
         // optional string example_number = 6;
         /*
         if (!desc.exampleNumber.equals("")) {
@@ -452,136 +471,164 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         // jsArrayBuilder.endArray();
     }
 
-    // Converts PhoneMetadata to JSArray.
+    /** 
+     * Converts PhoneMetadata to custom representation.
+     * @param metadata Phone metedata object
+     * @param jsArrayBuilder Buffer builder to output the representation
+     * @return integer representing the country code (if available) plus binary flags
+     *         representing some of the metadata fields
+     */ 
     private static int toJsArray(PhoneMetadata metadata, RegexBufBuilder jsArrayBuilder) {
         // jsArrayBuilder.beginArray();
-        int ret = 0;
+        int ret = 0;    
+        // Metadata binary flags to be encoded
         final int FLAG_SAME_MOBILE_FIXED = 1024;
         final int FLAG_MAIN_COUNTRY_FOR_CODE = 2048;
         final int FLAG_LEADING_ZERO_POSSIBLE = 4096;
         final int FLAG_MOBILE_PORTABLE_REGION = 8192;
-
+        
         // missing 0
         jsArrayBuilder.append(null);
         // optional PhoneNumberDesc general_desc = 1;
-        toJsArray(1, metadata.generalDesc, jsArrayBuilder);
+        toJsArray(1, metadata.getGeneralDesc(), jsArrayBuilder);
         // optional PhoneNumberDesc fixed_line = 2;
-        toJsArray(2, metadata.fixedLine, jsArrayBuilder);
+        toJsArray(2, metadata.getFixedLine(), jsArrayBuilder);
         // optional PhoneNumberDesc mobile = 3;
-        toJsArray(3, metadata.mobile, jsArrayBuilder);
+        toJsArray(3, metadata.getMobile(), jsArrayBuilder);
         // optional PhoneNumberDesc toll_free = 4;
-        toJsArray(4, metadata.tollFree, jsArrayBuilder);
+        toJsArray(4, metadata.getTollFree(), jsArrayBuilder);
         // optional PhoneNumberDesc premium_rate = 5;
-        toJsArray(5, metadata.premiumRate, jsArrayBuilder);
+        toJsArray(5, metadata.getPremiumRate(), jsArrayBuilder);
         // optional PhoneNumberDesc shared_cost = 6;
-        toJsArray(6, metadata.sharedCost, jsArrayBuilder);
+        toJsArray(6, metadata.getSharedCost(), jsArrayBuilder);
         // optional PhoneNumberDesc personal_number = 7;
-        toJsArray(7, metadata.personalNumber, jsArrayBuilder);
+        toJsArray(7, metadata.getPersonalNumber(), jsArrayBuilder);
         // optional PhoneNumberDesc voip = 8;
-        toJsArray(8, metadata.voip, jsArrayBuilder);
+        toJsArray(8, metadata.getVoip(), jsArrayBuilder);
 
         // required string id = 9;
         // jsArrayBuilder.append(metadata.id);
         // optional int32 country_code = 10;
-        if (metadata.countryCode != 0) {
-            ret += metadata.countryCode;
-            // jsArrayBuilder.append(metadata.countryCode);
-        } else {
-            // jsArrayBuilder.append(null);
-        }
-        // optional string international_prefix = 11;
-        if (!metadata.internationalPrefix.equals("")) {
-            jsArrayBuilder.append(11, metadata.internationalPrefix);
+        if (metadata.hasCountryCode()) {
+            ret += metadata.getCountryCode();
         } else {
             jsArrayBuilder.append(null);
         }
-
+            
+        // optional string international_prefix = 11;
+        // TODO: Don't set in format if default to begin with, and replace this check with "has".
+        if (metadata.getInternationalPrefix().length() > 0) {
+            jsArrayBuilder.append(metadata.getInternationalPrefix());
+        } else {
+            jsArrayBuilder.append(null);
+        }
+        
         /*
         // optional string national_prefix = 12;
-        if (!metadata.nationalPrefix.equals("")) {
-            jsArrayBuilder.append(metadata.nationalPrefix);
+        if (metadata.hasNationalPrefix()) {
+          jsArrayBuilder.append(metadata.getNationalPrefix());
         } else {
-            jsArrayBuilder.append(null);
+          jsArrayBuilder.append(null);
         }
         // optional string preferred_extn_prefix = 13;
-        if (!metadata.preferredExtnPrefix.equals("")) {
-            jsArrayBuilder.append(metadata.preferredExtnPrefix);
+        if (metadata.hasPreferredExtnPrefix()) {
+          jsArrayBuilder.append(metadata.getPreferredExtnPrefix());
         } else {
-            jsArrayBuilder.append(null);
+          jsArrayBuilder.append(null);
         }
         // missing 14
         jsArrayBuilder.append(null);
         // optional string national_prefix_for_parsing = 15;
-        if (!metadata.nationalPrefixForParsing.equals("")) {
-            jsArrayBuilder.append(metadata.nationalPrefixForParsing);
+        if (metadata.hasNationalPrefixForParsing()) {
+          jsArrayBuilder.append(metadata.getNationalPrefixForParsing());
         } else {
-            jsArrayBuilder.append(null);
+          jsArrayBuilder.append(null);
         }
         // optional string national_prefix_transform_rule = 16;
-        if (!metadata.nationalPrefixTransformRule.equals("")) {
-            jsArrayBuilder.append(metadata.nationalPrefixTransformRule);
+        if (metadata.hasNationalPrefixTransformRule()) {
+          jsArrayBuilder.append(metadata.getNationalPrefixTransformRule());
         } else {
-            jsArrayBuilder.append(null);
+          jsArrayBuilder.append(null);
         }
         // optional string preferred_international_prefix = 17;
-        if (!metadata.preferredInternationalPrefix.equals("")) {
-            jsArrayBuilder.append(metadata.preferredInternationalPrefix);
+        if (metadata.hasPreferredInternationalPrefix()) {
+          jsArrayBuilder.append(metadata.getPreferredInternationalPrefix());
         } else {
-            jsArrayBuilder.append(null);
+          jsArrayBuilder.append(null);
         }
         */
         // optional bool same_mobile_and_fixed_line_pattern = 18 [default=false];
-        if (metadata.sameMobileAndFixedLinePattern) {
-            //jsArrayBuilder.append(1);
+        if (metadata.isSameMobileAndFixedLinePattern()) {
+          // jsArrayBuilder.append(1);
             ret |= FLAG_SAME_MOBILE_FIXED;
         } else {
-            // jsArrayBuilder.append(null);
+            jsArrayBuilder.append(null);
         }
+        /*
         // repeated NumberFormat number_format = 19;
-        // Skipped
-
+        int numberFormatSize = metadata.numberFormatSize();
+        if (numberFormatSize > 0) {
+          jsArrayBuilder.beginArray();
+          for (int i = 0; i < numberFormatSize; i++) {
+            toJsArray(metadata.getNumberFormat(i), jsArrayBuilder);
+          }
+          jsArrayBuilder.endArray();
+        } else {
+          jsArrayBuilder.append(null);
+        }
         // repeated NumberFormat intl_number_format = 20;
-        // Skipped
-
+        int intlNumberFormatSize = metadata.intlNumberFormatSize();
+        if (intlNumberFormatSize > 0) {
+          jsArrayBuilder.beginArray();
+          for (int i = 0; i < intlNumberFormatSize; i++) {
+            toJsArray(metadata.getIntlNumberFormat(i), jsArrayBuilder);
+          }
+          jsArrayBuilder.endArray();
+        } else {
+          jsArrayBuilder.append(null);
+        }
+        */
+        
         // optional PhoneNumberDesc pager = 21;
-        toJsArray(21, metadata.pager, jsArrayBuilder);
-
+        toJsArray(21, metadata.getPager(), jsArrayBuilder);
 
         // optional bool main_country_for_code = 22 [default=false];
-        if (metadata.mainCountryForCode) {
+        if (metadata.isMainCountryForCode()) {
+            // jsArrayBuilder.append(1);
             ret |= FLAG_MAIN_COUNTRY_FOR_CODE;
-            //jsArrayBuilder.append(1);
         } else {
-            //jsArrayBuilder.append(null);
+            jsArrayBuilder.append(null);
         }
+        
         // optional string leading_digits = 23;
-        if (!metadata.leadingDigits.equals("")) {
-            jsArrayBuilder.append(23, metadata.leadingDigits);
+        if (!metadata.hasLeadingDigits()) {
+            jsArrayBuilder.append(23, metadata.getLeadingDigits());
         } else {
             jsArrayBuilder.append(null);
         }
         // optional PhoneNumberDesc no_international_dialling = 24;
-        // toJsArray(metadata.noInternationalDialling, jsArrayBuilder);
+        // toJsArray(metadata.getNoInternationalDialling(), jsArrayBuilder);
+        
         // optional PhoneNumberDesc uan = 25;
-        toJsArray(25, metadata.uan, jsArrayBuilder);
+        toJsArray(25, metadata.getUan(), jsArrayBuilder);
 
         // optional bool leading_zero_possible = 26 [default=false];
-        if (metadata.leadingZeroPossible) {
+        if (metadata.isLeadingZeroPossible()) {
             ret |= FLAG_LEADING_ZERO_POSSIBLE;
             // jsArrayBuilder.append(1);
         } else {
-            // jsArrayBuilder.append(null);
+            jsArrayBuilder.append(null);
         }
         // optional PhoneNumberDesc emergency = 27;
-        // toJsArray(metadata.emergency, jsArrayBuilder);
+        // toJsArray(metadata.getEmergency(), jsArrayBuilder);
         // optional PhoneNumberDesc voicemail = 28;
-        toJsArray(28, metadata.voicemail, jsArrayBuilder);
+        toJsArray(28, metadata.getVoicemail(), jsArrayBuilder);
         // Fields 29-31 are omitted due to space increase.
         // optional PhoneNumberDesc short_code = 29;
         // optional PhoneNumberDesc standard_rate = 30;
         // optional PhoneNumberDesc carrier_specific = 31;
         // optional bool mobile_number_portable_region = 32 [default=false];
-        if (metadata.mobileNumberPortableRegion) {
+        if (metadata.isMobileNumberPortableRegion()) {
             ret |= FLAG_MOBILE_PORTABLE_REGION;
         }
         // Omit since the JS API doesn't expose this data.
@@ -691,9 +738,12 @@ public class BuildMetadataSimplifiedFromXml extends Command {
 
         static int bitpos;
         static byte[] byteBuf;
-        static int byteBufIdx;
+        static int byteBufIdx = -1;
+        
         /**
          * Encode the string into buffer, 5 bits for each char
+         * @return byte[] of the encoded string. The length of the last encoded 
+         * string can be separately retrieved from {@link #encodedLength()}
          */
         public byte[] encodeString() {
             // Internal buffer representation
@@ -728,6 +778,11 @@ public class BuildMetadataSimplifiedFromXml extends Command {
                 }
             }
             return byteBuf;
+        }
+        
+        public static int encodedLength() {
+            // byteBufIdx is the last written pos. Length = byteBufIdx + 1
+            return byteBufIdx + 1;
         }
 
         private void encodeByte(byte b) {
@@ -801,13 +856,18 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         }
     }
 
+    
     private static class Utils {
-        // Expand into original regular expression
-        // 1. expand ( to (?:, escaped \( to (
-        // 2. replace d with \d
-        // 3. following d, replace any #[,#] / #[,#]} with {#[,#} except when d is escaped
-        // 4. also unescape \; if any
-
+        
+        /**
+         * Expand into original regular expression
+         *  1. expand ( to (?:, escaped \( to (
+         *  2. replace d with \d
+         *  3. following d, replace any #[,#] / #[,#]} with {#[,#} except when d is escaped
+         *  4. also unescape \; if any
+         * @param string string to expand
+         * @return expanded expression
+         */
         public static String expandRegex(String string) {
             StringBuilder sb = new StringBuilder();
             int strlen = string.length();

@@ -368,12 +368,15 @@ final class SingleFileMetadataSourceImpl implements MetadataSource {
         static final byte CODE_SEPARATOR = 31;
         static final byte CODE_TERMINATOR = 0;
 
-        // Expand into original regular expression
-        // 1. expand ( to (?:, escaped \( to (
-        // 2. replace d with \d
-        // 3. following d, replace any #[,#] / #[,#]} with {#[,#} except when d is escaped
-        // 4. also unescape \; if any
-
+        /**
+         * Expand into original regular expression
+         *  1. expand ( to (?:, escaped \( to (
+         *  2. replace d with \d
+         *  3. following d, replace any #[,#] / #[,#]} with {#[,#} except when d is escaped
+         *  4. also unescape \; if any
+         * @param string string to expand
+         * @return expanded expression
+         */
         public static String expandRegex(String string) {
             StringBuilder sb = new StringBuilder();
             int strlen = string.length();

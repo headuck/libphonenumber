@@ -52,7 +52,9 @@
 namespace i18n {
 namespace phonenumbers {
 
+using google::protobuf::RepeatedField;
 using google::protobuf::RepeatedPtrField;
+using std::find;
 
 // static constants
 const size_t PhoneNumberUtil::kMinLengthForNsn;
@@ -206,9 +208,9 @@ string CreateExtnPattern(const string& single_extn_symbols) {
   // The first regular expression covers RFC 3966 format, where the extension is
   // added using ";ext=". The second more generic one starts with optional white
   // space and ends with an optional full stop (.), followed by zero or more
-  // spaces/tabs and then the numbers themselves. The third one covers the
-  // special case of American numbers where the extension is written with a hash
-  // at the end, such as "- 503#".
+  // spaces/tabs/commas and then the numbers themselves. The third one covers
+  // the special case of American numbers where the extension is written with a
+  // hash at the end, such as "- 503#".
   // Note that the only capturing groups should be around the digits that you
   // want to capture as part of the extension, or else parsing will fail!
   // Canonical-equivalence doesn't seem to be an option with RE2, so we allow
@@ -263,17 +265,41 @@ void NormalizeHelper(const map<char32, char>& normalization_replacements,
   number->assign(normalized_number);
 }
 
-PhoneNumberUtil::ValidationResult TestNumberLengthAgainstPattern(
-    const RegExp& number_pattern, const string& number) {
-  string extracted_number;
-  if (number_pattern.FullMatch(number, &extracted_number)) {
+// Helper method to check a number against possible lengths for this number, and
+// determine whether it matches, or is too short or too long. Currently, if a
+// number pattern suggests that numbers of length 7 and 10 are possible, and a
+// number in between these possible lengths is entered, such as of length 8,
+// this will return TOO_LONG.
+PhoneNumberUtil::ValidationResult TestNumberLength(
+    const string& number, const PhoneNumberDesc& phone_number_desc) {
+  RepeatedField<int> possible_lengths = phone_number_desc.possible_length();
+  RepeatedField<int> local_lengths =
+      phone_number_desc.possible_length_local_only();
+  int actual_length = number.length();
+  if (find(local_lengths.begin(), local_lengths.end(), actual_length) !=
+      local_lengths.end()) {
     return PhoneNumberUtil::IS_POSSIBLE;
   }
-  if (number_pattern.PartialMatch(number, &extracted_number)) {
-    return PhoneNumberUtil::TOO_LONG;
-  } else {
+  // There should always be "possibleLengths" set for every element. This will
+  // be a build-time check once ShortNumberMetadata.xml is migrated to contain
+  // this information as well.
+  int minimum_length = possible_lengths.Get(0);
+  if (minimum_length == actual_length) {
+    return PhoneNumberUtil::IS_POSSIBLE;
+  } else if (minimum_length > actual_length) {
     return PhoneNumberUtil::TOO_SHORT;
+  } else if (*(possible_lengths.end() - 1) < actual_length) {
+    return PhoneNumberUtil::TOO_LONG;
   }
+  // Note that actually the number is not too long if possible_lengths does not
+  // contain the length: we know it is less than the highest possible number
+  // length, and higher than the lowest possible number length. However, we
+  // don't currently have an enum to express this, so we return TOO_LONG in the
+  // short-term.
+  // We skip the first element; we've already checked it.
+  return find(possible_lengths.begin() + 1, possible_lengths.end(),
+              actual_length) != possible_lengths.end()
+      ? PhoneNumberUtil::IS_POSSIBLE : PhoneNumberUtil::TOO_LONG;
 }
 
 }  // namespace
@@ -288,6 +314,7 @@ class PhoneNumberRegExpsAndMappings {
   void InitializeMapsAndSets() {
     diallable_char_mappings_.insert(std::make_pair('+', '+'));
     diallable_char_mappings_.insert(std::make_pair('*', '*'));
+    diallable_char_mappings_.insert(std::make_pair('#', '#'));
     // Here we insert all punctuation symbols that we wish to respect when
     // formatting alpha numbers, as they show the intended number groupings.
     all_plus_number_grouping_symbols_.insert(
@@ -424,8 +451,8 @@ class PhoneNumberRegExpsAndMappings {
   // will be run as a case-insensitive regexp match. Wide character versions are
   // also provided after each ASCII version.
   // For parsing, we are slightly more lenient in our interpretation than for
-  // matching. Here we allow a "comma" as a possible extension indicator. When
-  // matching, this is hardly ever used to indicate this.
+  // matching. Here we allow "comma" and "semicolon" as possible extension
+  // indicators. When matching, these are hardly ever used to indicate this.
   const string extn_patterns_for_parsing_;
 
  public:
@@ -543,7 +570,7 @@ class PhoneNumberRegExpsAndMappings {
                    punctuation_and_star_sign_, kDigits,
                    "]*")),
         extn_patterns_for_parsing_(
-            CreateExtnPattern(StrCat(",", kSingleExtnSymbolsForMatching))),
+            CreateExtnPattern(StrCat(",;", kSingleExtnSymbolsForMatching))),
         regexp_factory_(new RegExpFactory()),
         regexp_cache_(new RegExpCache(*regexp_factory_.get(), 128)),
         diallable_char_mappings_(),
@@ -661,8 +688,7 @@ PhoneNumberUtil::PhoneNumberUtil()
       country_calling_code_to_region_map.end());
   // Sort all the pairs in ascending order according to country calling code.
   std::sort(country_calling_code_to_region_code_map_->begin(),
-            country_calling_code_to_region_code_map_->end(),
-            OrderByFirst());
+            country_calling_code_to_region_code_map_->end(), OrderByFirst());
 }
 
 PhoneNumberUtil::~PhoneNumberUtil() {
@@ -786,9 +812,9 @@ bool PhoneNumberUtil::HasValidCountryCallingCode(
   // locate the pair with the same country_code in the sorted vector.
   IntRegionsPair target_pair;
   target_pair.first = country_calling_code;
-  return (binary_search(country_calling_code_to_region_code_map_->begin(),
-                        country_calling_code_to_region_code_map_->end(),
-                        target_pair, OrderByFirst()));
+  return (std::binary_search(country_calling_code_to_region_code_map_->begin(),
+                             country_calling_code_to_region_code_map_->end(),
+                             target_pair, OrderByFirst()));
 }
 
 // Returns a pointer to the phone metadata for the appropriate region or NULL
@@ -966,7 +992,11 @@ void PhoneNumberUtil::FormatNationalNumberWithPreferredCarrierCode(
     string* formatted_number) const {
   FormatNationalNumberWithCarrierCode(
       number,
-      number.has_preferred_domestic_carrier_code()
+      // Historically, we set this to an empty string when parsing with raw
+      // input if none was found in the input string. However, this doesn't
+      // result in a number we can dial. For this reason, we treat the empty
+      // string the same as if it isn't set at all.
+      !number.preferred_domestic_carrier_code().empty()
           ? number.preferred_domestic_carrier_code()
           : fallback_carrier_code,
       formatted_number);
@@ -1002,9 +1032,13 @@ void PhoneNumberUtil::FormatNumberForMobileDialing(
           number_no_extension, kColombiaMobileToFixedLinePrefix,
           formatted_number);
     } else if ((region_code == "BR") && (is_fixed_line_or_mobile)) {
-      if (number_no_extension.has_preferred_domestic_carrier_code()) {
-      FormatNationalNumberWithPreferredCarrierCode(number_no_extension, "",
-                                                   formatted_number);
+      // Historically, we set this to an empty string when parsing with raw
+      // input if none was found in the input string. However, this doesn't
+      // result in a number we can dial. For this reason, we treat the empty
+      // string the same as if it isn't set at all.
+      if (!number_no_extension.preferred_domestic_carrier_code().empty()) {
+        FormatNationalNumberWithPreferredCarrierCode(number_no_extension, "",
+                                                     formatted_number);
       } else {
         // Brazilian fixed line and mobile numbers need to be dialed with a
         // carrier code when called within Brazil. Without that, most of the
@@ -1033,8 +1067,8 @@ void PhoneNumberUtil::FormatNumberForMobileDialing(
       string national_number;
       GetNationalSignificantNumber(number_no_extension, &national_number);
       if (CanBeInternationallyDialled(number_no_extension) &&
-          !IsShorterThanPossibleNormalNumber(region_metadata,
-              national_number)) {
+          TestNumberLength(national_number, region_metadata->general_desc()) !=
+              TOO_SHORT) {
         Format(number_no_extension, INTERNATIONAL, formatted_number);
       } else {
         Format(number_no_extension, NATIONAL, formatted_number);
@@ -1055,8 +1089,9 @@ void PhoneNumberUtil::FormatNumberForMobileDialing(
            // national format, but don't have it when used for display. The
            // reverse is true for mobile numbers. As a result, we output them in
            // the international format to make it work.
-           ((region_code == "MX" || region_code == "CL") &&
-               is_fixed_line_or_mobile)) &&
+           ((region_code == "MX" ||
+             region_code == "CL") &&
+            is_fixed_line_or_mobile)) &&
           CanBeInternationallyDialled(number_no_extension)) {
         Format(number_no_extension, INTERNATIONAL, formatted_number);
       } else {
@@ -1769,11 +1804,11 @@ bool PhoneNumberUtil::GetExampleNumberForType(
     int country_calling_code = *it;
     const PhoneMetadata* metadata =
         GetMetadataForNonGeographicalRegion(country_calling_code);
-    const PhoneNumberDesc& desc = metadata->general_desc();
-    if (desc.has_example_number()) {
+    const PhoneNumberDesc* desc = GetNumberDescByType(*metadata, type);
+    if (desc->has_example_number()) {
       ErrorType success = Parse(StrCat(kPlusSign,
                                        country_calling_code,
-                                       desc.example_number()),
+                                       desc->example_number()),
                                 RegionCode::GetUnknown(), number);
       if (success == NO_PARSING_ERROR) {
         return true;
@@ -1793,17 +1828,28 @@ bool PhoneNumberUtil::GetExampleNumberForNonGeoEntity(
   const PhoneMetadata* metadata =
       GetMetadataForNonGeographicalRegion(country_calling_code);
   if (metadata) {
-    const PhoneNumberDesc& desc = metadata->general_desc();
-    if (desc.has_example_number()) {
-      ErrorType success = Parse(StrCat(kPlusSign,
-                                       SimpleItoa(country_calling_code),
-                                       desc.example_number()),
-                                RegionCode::GetUnknown(), number);
-      if (success == NO_PARSING_ERROR) {
-        return true;
-      } else {
-        LOG(ERROR) << "Error parsing example number ("
-                   << static_cast<int>(success) << ")";
+    // For geographical entities, fixed-line data is always present. However,
+    // for non-geographical entities, this is not the case, so we have to go
+    // through different types to find the example number. We don't check
+    // fixed-line or personal number since they aren't used by non-geographical
+    // entities (if this changes, a unit-test will catch this.)
+    const int kNumberTypes = 7;
+    PhoneNumberDesc types[kNumberTypes] = {
+        metadata->mobile(), metadata->toll_free(), metadata->shared_cost(),
+        metadata->voip(), metadata->voicemail(), metadata->uan(),
+        metadata->premium_rate()};
+    for (int i = 0; i < kNumberTypes; ++i) {
+      if (types[i].has_example_number()) {
+        ErrorType success = Parse(StrCat(kPlusSign,
+                                         SimpleItoa(country_calling_code),
+                                         types[i].example_number()),
+                                  RegionCode::GetUnknown(), number);
+        if (success == NO_PARSING_ERROR) {
+          return true;
+        } else {
+          LOG(ERROR) << "Error parsing example number ("
+                     << static_cast<int>(success) << ")";
+        }
       }
     }
   } else {
@@ -1985,13 +2031,13 @@ PhoneNumberUtil::ErrorType PhoneNumberUtil::ParseHelper(
                                            &potential_national_number,
                                            &carrier_code);
     // We require that the NSN remaining after stripping the national prefix
-    // and carrier code be of a possible length for the region. Otherwise, we
-    // don't do the stripping, since the original number could be a valid short
-    // number.
-    if (!IsShorterThanPossibleNormalNumber(country_metadata,
-        potential_national_number)) {
+    // and carrier code be long enough to be a possible length for the region.
+    // Otherwise, we don't do the stripping, since the original number could be
+    // a valid short number.
+    if (TestNumberLength(potential_national_number,
+                         country_metadata->general_desc()) != TOO_SHORT) {
       normalized_national_number.assign(potential_national_number);
-      if (keep_raw_input) {
+      if (keep_raw_input && !carrier_code.empty()) {
         temp_number.set_preferred_domestic_carrier_code(carrier_code);
       }
     }
@@ -2098,10 +2144,7 @@ PhoneNumberUtil::ValidationResult PhoneNumberUtil::IsPossibleNumberWithReason(
   // Metadata cannot be NULL because the country calling code is valid.
   const PhoneMetadata* metadata =
       GetMetadataForRegionOrCallingCode(country_code, region_code);
-  const RegExp& possible_number_pattern = reg_exps_->regexp_cache_->GetRegExp(
-      StrCat("(", metadata->general_desc().possible_number_pattern(), ")"));
-  return TestNumberLengthAgainstPattern(possible_number_pattern,
-                                        national_number);
+  return TestNumberLength(national_number, metadata->general_desc());
 }
 
 bool PhoneNumberUtil::TruncateTooLongNumber(PhoneNumber* number) const {
@@ -2203,19 +2246,22 @@ void PhoneNumberUtil::SetItalianLeadingZerosForPhoneNumber(
   }
 }
 
-bool PhoneNumberUtil::IsNumberPossibleForDesc(
-    const string& national_number, const PhoneNumberDesc& number_desc) const {
-  return reg_exps_->regexp_cache_.get()->
-             GetRegExp(number_desc.possible_number_pattern())
-             .FullMatch(national_number);
-}
-
 bool PhoneNumberUtil::IsNumberMatchingDesc(
     const string& national_number, const PhoneNumberDesc& number_desc) const {
-  return IsNumberPossibleForDesc(national_number, number_desc) &&
-         reg_exps_->regexp_cache_.get()->
-             GetRegExp(number_desc.national_number_pattern())
-             .FullMatch(national_number);
+  // Check if any possible number lengths are present; if so, we use them to
+  // avoid checking the validation pattern if they don't match. If they are
+  // absent, this means they match the general description, which we have
+  // already checked before checking a specific number type.
+  int actual_length = national_number.length();
+  if (number_desc.possible_length_size() > 0 &&
+      std::find(number_desc.possible_length().begin(),
+                number_desc.possible_length().end(),
+                actual_length) == number_desc.possible_length().end()) {
+    return false;
+  }
+  return reg_exps_->regexp_cache_
+      ->GetRegExp(number_desc.national_number_pattern())
+      .FullMatch(national_number);
 }
 
 PhoneNumberUtil::PhoneNumberType PhoneNumberUtil::GetNumberTypeHelper(
@@ -2732,16 +2778,12 @@ PhoneNumberUtil::ErrorType PhoneNumberUtil::MaybeExtractCountryCode(
                                              NULL);
       VLOG(4) << "Number without country calling code prefix: "
               << potential_national_number;
-      const RegExp& possible_number_pattern =
-          reg_exps_->regexp_cache_->GetRegExp(
-              StrCat("(", general_num_desc.possible_number_pattern(), ")"));
       // If the number was not valid before but is valid now, or if it was too
       // long before, we consider the number with the country code stripped to
       // be a better result and keep that instead.
       if ((!valid_number_pattern.FullMatch(*national_number) &&
            valid_number_pattern.FullMatch(potential_national_number)) ||
-           TestNumberLengthAgainstPattern(possible_number_pattern,
-                                          *national_number) == TOO_LONG) {
+           TestNumberLength(*national_number, general_num_desc) == TOO_LONG) {
         national_number->assign(potential_national_number);
         if (keep_raw_input) {
           phone_number->set_country_code_source(
@@ -2895,15 +2937,6 @@ PhoneNumberUtil::MatchType PhoneNumberUtil::IsNumberMatchWithOneString(
 AsYouTypeFormatter* PhoneNumberUtil::GetAsYouTypeFormatter(
     const string& region_code) const {
   return new AsYouTypeFormatter(region_code);
-}
-
-bool PhoneNumberUtil::IsShorterThanPossibleNormalNumber(
-    const PhoneMetadata* country_metadata, const string& number) const {
-  const RegExp& possible_number_pattern =
-      reg_exps_->regexp_cache_->GetRegExp(StrCat("(",
-          country_metadata->general_desc().possible_number_pattern(), ")"));
-  return TestNumberLengthAgainstPattern(possible_number_pattern, number) ==
-      PhoneNumberUtil::TOO_SHORT;
 }
 
 bool PhoneNumberUtil::CanBeInternationallyDialled(

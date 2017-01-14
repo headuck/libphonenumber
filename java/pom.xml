@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.googlecode.libphonenumber</groupId>
   <artifactId>libphonenumber-parent</artifactId>
-  <version>7.6.2-SNAPSHOT</version>
+  <version>7.7.6-SNAPSHOT</version>
   <packaging>pom</packaging>
   <url>https://github.com/googlei18n/libphonenumber/</url>
 
@@ -87,6 +87,24 @@
   </modules>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.felix</groupId>
+          <artifactId>maven-bundle-plugin</artifactId>
+          <version>3.2.0</version>
+          <executions>
+            <execution>
+              <id>bundle-manifest</id>
+              <phase>process-classes</phase>
+              <goals>
+                <goal>manifest</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -129,7 +147,7 @@
         <artifactId>maven-release-plugin</artifactId>
         <version>2.2.1</version>
         <configuration>
-          <tagNameFormat>libphonenumber-@{project.version}</tagNameFormat>
+          <tagNameFormat>v@{project.version}</tagNameFormat>
         </configuration>
       </plugin>
       <plugin>

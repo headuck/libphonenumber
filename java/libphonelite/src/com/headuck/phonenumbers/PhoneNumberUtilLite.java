@@ -160,6 +160,7 @@ public class PhoneNumberUtilLite {
         diallableCharMap.putAll(asciiDigitMappings);
         diallableCharMap.put(PLUS_SIGN, PLUS_SIGN);
         diallableCharMap.put('*', '*');
+        diallableCharMap.put('#', '#');
         DIALLABLE_CHAR_MAPPINGS = Collections.unmodifiableMap(diallableCharMap);
 
         HashMap<Character, Character> allPlusNumberGroupings = new HashMap<Character, Character>();
@@ -201,8 +202,9 @@ public class PhoneNumberUtilLite {
     private static final String DIGITS = "\\p{Nd}";
     // We accept alpha characters in phone numbers, ASCII only, upper and lower case.
     private static final String VALID_ALPHA =
-            Arrays.toString(ALPHA_MAPPINGS.keySet().toArray()).replaceAll("[, \\[\\]]", "") +
-                    Arrays.toString(ALPHA_MAPPINGS.keySet().toArray()).toLowerCase().replaceAll("[, \\[\\]]", "");
+            Arrays.toString(ALPHA_MAPPINGS.keySet().toArray()).replaceAll("[, \\[\\]]", "") 
+                    + Arrays.toString(ALPHA_MAPPINGS.keySet().toArray())
+                    .toLowerCase().replaceAll("[, \\[\\]]", "");
     static final String PLUS_CHARS = "+\uFF0B";
     static final Pattern PLUS_CHARS_PATTERN = Pattern.compile("[" + PLUS_CHARS + "]+");
     private static final Pattern CAPTURING_DIGIT_PATTERN = Pattern.compile("(" + DIGITS + ")");
@@ -899,17 +901,20 @@ public class PhoneNumberUtilLite {
     }
 
     /**
-     * Helper method to check a number against a particular pattern and determine whether it matches,
-     * or is too short or too long. Currently, if a number pattern suggests that numbers of length 7
-     * and 10 are possible, and a number in between these possible lengths is entered, such as of
-     * length 8, this will return TOO_LONG.
+     * Helper method to check a number against possible lengths for this number, and determine whether
+     * it matches, or is too short or too long. Currently, if a number pattern suggests that numbers
+     * of length 7 and 10 are possible, and a number in between these possible lengths is entered,
+     * such as of length 8, this will return TOO_LONG.
      */
-    private ValidationResult testNumberLengthAgainstPattern(Pattern numberPattern, String number) {
-        Matcher numberMatcher = numberPattern.matcher(number);
-        if (numberMatcher.matches()) {
+    private ValidationResult testNumberLength(int possibleNumberLengths, String number) {
+        int len = number.length();
+        if (len >= 30) return ValidationResult.TOO_LONG;
+        
+        int lenMask = 1 << len;
+        if ((lenMask & possibleNumberLengths) > 0) {
             return ValidationResult.IS_POSSIBLE;
         }
-        if (numberMatcher.lookingAt()) {
+        if (lenMask > possibleNumberLengths) {
             return ValidationResult.TOO_LONG;
         } else {
             return ValidationResult.TOO_SHORT;
@@ -921,10 +926,13 @@ public class PhoneNumberUtilLite {
      * region.
      */
     private boolean isShorterThanPossibleNormalNumber(PhoneMetadata regionMetadata, String number) {
-        Pattern possibleNumberPattern = regexCache.getPatternForRegex(
-                regionMetadata.generalDescPossible);
-        return testNumberLengthAgainstPattern(possibleNumberPattern, number) ==
+        try {
+            int possibleNumberLengths = Integer.parseInt(regionMetadata.generalDescPossible);
+                    return testNumberLength(possibleNumberLengths, number) ==
                 ValidationResult.TOO_SHORT;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     /**
@@ -961,9 +969,12 @@ public class PhoneNumberUtilLite {
         String regionCode = getRegionCodeForCountryCode(countryCode);
         // Metadata cannot be null because the country calling code is valid.
         PhoneMetadata metadata = getMetadataForRegionOrCallingCode(countryCode, regionCode);
-        Pattern possibleNumberPattern =
-                regexCache.getPatternForRegex(metadata.generalDescPossible);
-        return testNumberLengthAgainstPattern(possibleNumberPattern, nationalNumber);
+        try {
+            int possibleNumberLengths = Integer.parseInt(metadata.generalDescPossible);
+            return testNumberLength(possibleNumberLengths, nationalNumber);
+        } catch (NumberFormatException e) {
+            return ValidationResult.IS_POSSIBLE;
+        }
     }
 
     /**
@@ -1097,14 +1108,18 @@ public class PhoneNumberUtilLite {
                 // Removed processing of national prefix - not applicable
                 //maybeStripNationalPrefixAndCarrierCode(
                 //        potentialNationalNumber, defaultRegionMetadata, null /* Don't need the carrier code */);
-                Pattern possibleNumberPattern =
-                        regexCache.getPatternForRegex(defaultRegionMetadata.generalDescPossible);
+                int possibleNumberLengths;
+                try {
+                    possibleNumberLengths = Integer.parseInt(defaultRegionMetadata.generalDescPossible);
+                } catch (NumberFormatException e) {
+                    possibleNumberLengths = 1 << 30;  // Such that it would not return too long below
+                }       
                 // If the number was not valid before but is valid now, or if it was too long before, we
                 // consider the number with the country calling code stripped to be a better result and
                 // keep that instead.
                 if ((!validNumberPattern.matcher(fullNumber).matches() &&
                         validNumberPattern.matcher(potentialNationalNumber).matches()) ||
-                        testNumberLengthAgainstPattern(possibleNumberPattern, fullNumber.toString())
+                        testNumberLength(possibleNumberLengths, fullNumber.toString())
                                 == ValidationResult.TOO_LONG) {
                     nationalNumber.append(potentialNationalNumber);
                     if (keepRawInput) {
