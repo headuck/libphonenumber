@@ -518,7 +518,7 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         // optional string international_prefix = 11;
         // TODO: Don't set in format if default to begin with, and replace this check with "has".
         if (metadata.getInternationalPrefix().length() > 0) {
-            jsArrayBuilder.append(metadata.getInternationalPrefix());
+            jsArrayBuilder.append(11, metadata.getInternationalPrefix());
         } else {
             jsArrayBuilder.append(null);
         }
