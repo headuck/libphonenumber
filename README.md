@@ -1,12 +1,17 @@
 <p align="right">
 <img src="https://travis-ci.org/googlei18n/libphonenumber.svg?branch=master">
 </p>
+
 # What is it?
 
-Google's common Java, C++ and JavaScript library for parsing, formatting, and validating international phone numbers. The Java version is optimized for running on smartphones, and is used by the Android framework since 4.0 (Ice Cream Sandwich).
+Google's common Java, C++ and JavaScript library for parsing, formatting, and
+validating international phone numbers. The Java version is optimized for
+running on smartphones, and is used by the Android framework since 4.0 (Ice
+Cream Sandwich).
 
 # Want to report an issue?
-If you want to report an issue, or to contribute to the project, please read the guidelines [here] (https://github.com/googlei18n/libphonenumber/blob/master/CONTRIBUTING.md) first.
+If you want to report an issue, or to contribute to the project, please read
+the guidelines [here](CONTRIBUTING.md) first.
 
 # Highlights of functionality
   * Parsing/formatting/validating phone numbers for all countries/regions of the world.
@@ -19,16 +24,26 @@ If you want to report an issue, or to contribute to the project, please read the
   * ` findNumbers ` - finds numbers in text input.
   * ` PhoneNumberOfflineGeocoder ` - provides geographical information related to a phone number.
   * ` PhoneNumberToCarrierMapper ` - provides carrier information related to a phone number.
+  * ` PhoneNumberToTimeZonesMapper ` - provides timezone information related to a phone number.
 
-# Demo (v8.0.1)
+# Demo (v8.4.2)
 [Java](http://libphonenumber.appspot.com/)
 
 [JavaScript](https://rawgit.com/googlei18n/libphonenumber/master/javascript/i18n/phonenumbers/demo-compiled.html)
 
 # Code
-To include the code in your application, either integrate with Maven or download the latest Jars from the Maven repository:
+To include the code in your application, either integrate with Maven or
+download the latest Jars from the Maven repository:
 
 http://repo1.maven.org/maven2/com/googlecode/libphonenumber/libphonenumber/
+
+# Javadoc
+
+[Latest release](https://javadoc.io/doc/com.googlecode.libphonenumber/libphonenumber/)
+
+# FAQ
+
+See the [FAQ](FAQ.md) for common questions and tips.
 
 # Versioning and Announcements
 
@@ -41,28 +56,29 @@ building, we publish a major release. For example, if the last release were
 7.7.3, the new one would be 8.0.0.
 
 If any of those changes *enable* clients to update their code to take advantage
-of new functionality, we publish a minor release. So we'd go from 7.7.3 to
-7.8.0.
+of new functionality, and if clients would have to roll-back these changes in
+the event that the release was marked as "bad", we publish a minor release. For
+example, we'd go from 7.7.3 to 7.8.0.
 
-Otherwise, including when a release contains only [metadata]
-(http://github.com/googlei18n/libphonenumber/blob/master/FAQ.md#metadata_definition)
-changes, we publish a sub-minor release, e.g. 7.7.3 to 7.7.4.
+Otherwise, including when a release contains only
+[metadata](FAQ.md#metadata_definition) changes, we publish a sub-minor release,
+e.g. 7.7.3 to 7.7.4.
 
 Sometimes we make internal changes to the code or metadata that, while not
 affecting compatibility for clients, could affect compatibility for **porters**
 of the library. For such changes we make announcements to
-[libphonenumber-discuss]
-(http://groups.google.com/forum/#!forum/libphonenumber-discuss). Such changes
+[libphonenumber-discuss](
+http://groups.google.com/forum/#!forum/libphonenumber-discuss). Such changes
 are not reflected in the version number, and we would publish a sub-minor
 release if there were no other changes.
 
 Want to get notified of new releases? During most of the year, excepting
 holidays and extenuating circumstances, we release fortnightly. We update
 [release tags](http://github.com/googlei18n/libphonenumber/releases) and
-document detailed [release notes]
-(http://github.com/googlei18n/libphonenumber/blob/master/java/release_notes.txt).
-We also send an announcement to [libphonenumber-discuss]
-(http://groups.google.com/forum/#!forum/libphonenumber-discuss) for every
+document detailed [release notes](
+http://github.com/googlei18n/libphonenumber/blob/master/release_notes.txt).
+We also send an announcement to [libphonenumber-discuss](
+http://groups.google.com/forum/#!forum/libphonenumber-discuss) for every
 release.
 
 # Quick Examples
@@ -155,8 +171,13 @@ libphonenumber project. We do not evaluate their quality or influence their
 maintenance processes.
 
 *   C#: https://github.com/aidanbebbington/libphonenumber-csharp
+*   Javascript: If you don't want to use our version, which depends on Closure,
+    there are several other options, including
+    https://github.com/halt-hammerzeit/libphonenumber-js (a stripped-down
+    version) and https://github.com/seegno/google-libphonenumber (installable
+    via npm, a browserify-compatible wrapper)
+*   Objective-c: https://github.com/iziz/libPhoneNumber-iOS
 *   PHP: https://github.com/giggsey/libphonenumber-for-php
+*   PostgreSQL in-database types: https://github.com/blm768/pg-libphonenumber
 *   Python: https://github.com/daviddrysdale/python-phonenumbers
-*   Ruby: https://github.com/sstephenson/global_phone
-*   javascript (stripped-down version): https://github.com/halt-hammerzeit/libphonenumber-js
-*   objective-c: https://github.com/iziz/libPhoneNumber-iOS
+*   Ruby: https://github.com/mobi/telephone_number

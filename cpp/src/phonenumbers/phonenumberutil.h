@@ -56,9 +56,9 @@ class PhoneNumberRegExpsAndMappings;
 class RegExp;
 
 // NOTE: A lot of methods in this class require Region Code strings. These must
-// be provided using ISO 3166-1 two-letter country-code format. The list of the
-// codes can be found here:
-// http://www.iso.org/iso/english_country_names_and_code_elements
+// be provided using CLDR two-letter region-code format. These should be in
+// upper-case. The list of the codes can be found here:
+// http://www.unicode.org/cldr/charts/30/supplemental/territory_information.html
 
 class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
  private:
@@ -145,20 +145,61 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
 
   // Possible outcomes when testing if a PhoneNumber is possible.
   enum ValidationResult {
+    // The number length matches that of valid numbers for this region.
     IS_POSSIBLE,
+    // The number length matches that of local numbers for this region only
+    // (i.e. numbers that may be able to be dialled within an area, but do not
+    // have all the information to be dialled from anywhere inside or outside
+    // the country).
+    IS_POSSIBLE_LOCAL_ONLY,
+    // The number has an invalid country calling code.
     INVALID_COUNTRY_CODE,
+    // The number is shorter than all valid numbers for this region.
     TOO_SHORT,
+    // The number is longer than the shortest valid numbers for this region,
+    // shorter than the longest valid numbers for this region, and does not
+    // itself have a number length that matches valid numbers for this region.
+    // This can also be returned in the case where
+    // IsPossibleNumberForTypeWithReason was called, and there are no numbers of
+    // this type at all for this region.
+    INVALID_LENGTH,
+    // The number is longer than all valid numbers for this region.
     TOO_LONG,
   };
 
-  // Convenience method to get a list of what regions the library has metadata
-  // for.
-  void GetSupportedRegions(set<string>* regions) const;
+  // Returns all regions the library has metadata for.
+  // @returns an unordered set of the two-letter region codes for every
+  // geographical region the library supports
+  void GetSupportedRegions(
+      std::set<string>* regions) const;
 
-  // Convenience method to get a list of what global network calling codes the
-  // library has metadata for.
+  // Returns all global network calling codes the library has metadata for.
+  // @returns an unordered set of the country calling codes for every
+  // non-geographical entity the library supports
   void GetSupportedGlobalNetworkCallingCodes(
-      set<int>* calling_codes) const;
+      std::set<int>* calling_codes) const;
+
+  // Returns the types for a given region which the library has metadata for.
+  // Will not include FIXED_LINE_OR_MOBILE (if numbers for this non-geographical
+  // entity could be classified as FIXED_LINE_OR_MOBILE, both FIXED_LINE and
+  // MOBILE would be present) and UNKNOWN.
+  //
+  // No types will be returned for invalid or unknown region codes.
+  void GetSupportedTypesForRegion(
+      const string& region_code,
+      std::set<PhoneNumberType>* types) const;
+
+  // Returns the types for a country-code belonging to a non-geographical entity
+  // which the library has metadata for. Will not include FIXED_LINE_OR_MOBILE
+  // (instead both FIXED_LINE and FIXED_LINE_OR_MOBILE (if numbers for this
+  // non-geographical entity could be classified as FIXED_LINE_OR_MOBILE, both
+  // FIXED_LINE and MOBILE would be present) and UNKNOWN.
+  //
+  // No types will be returned for country calling codes that do not map to a
+  // known non-geographical entity.
+  void GetSupportedTypesForNonGeoEntity(
+      int country_calling_code,
+      std::set<PhoneNumberType>* types) const;
 
   // Gets a PhoneNumberUtil instance to carry out international phone number
   // formatting, parsing, or validation. The instance is loaded with phone
@@ -411,7 +452,8 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
       const string& region_code) const;
 
   // Returns the region where a phone number is from. This could be used for
-  // geo-coding at the region level.
+  // geocoding at the region level. Only guarantees correct results for valid,
+  // full numbers (not short-codes, or invalid numbers).
   void GetRegionCodeForNumber(const PhoneNumber& number,
                               string* region_code) const;
 
@@ -457,21 +499,63 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
   //   2. It doesn't attempt to figure out the type of the number, but uses
   //      general rules which applies to all types of phone numbers in a
   //      region. Therefore, it is much faster than IsValidNumber().
-  //   3. For fixed line numbers, many regions have the concept of area code,
-  //      which together with subscriber number constitute the national
-  //      significant number. It is sometimes okay to dial the subscriber
-  //      number only when dialing in the same area. This function will return
-  //      true if the subscriber-number-only version is passed in. On the other
-  //      hand, because IsValidNumber() validates using information on both
-  //      starting digits (for fixed line numbers, that would most likely be
-  //      area codes) and length (obviously includes the length of area codes
-  //      for fixed line numbers), it will return false for the
-  //      subscriber-number-only version.
+  //   3. For some numbers (particularly fixed-line), many regions have the
+  //      concept of area code, which together with subscriber number constitute
+  //      the national significant number. It is sometimes okay to dial only the
+  //      subscriber number when dialing in the same area. This function will
+  //      return IS_POSSIBLE_LOCAL_ONLY if the subscriber-number-only version is
+  //      passed in. On the other hand, because IsValidNumber() validates using
+  //      information on both starting digits (for fixed line numbers, that
+  //      would most likely be area codes) and length (obviously includes the
+  //      length of area codes for fixed line numbers), it will return false for
+  //      the subscriber-number-only version.
   ValidationResult IsPossibleNumberWithReason(const PhoneNumber& number) const;
 
-  // Convenience wrapper around IsPossibleNumberWithReason. Instead of returning
-  // the reason for failure, this method returns a boolean value.
+  // Convenience wrapper around IsPossibleNumberWithReason(). Instead of
+  // returning the reason for failure, this method returns true if the number is
+  // either a possible fully-qualified number (containing the area code and
+  // country code), or if the number could be a possible local number (with a
+  // country code, but missing an area code). Local numbers are considered
+  // possible if they could be possibly dialled in this format: if the area code
+  // is needed for a call to connect, the number is not considered possible
+  // without it.
   bool IsPossibleNumber(const PhoneNumber& number) const;
+
+  // Check whether a phone number is a possible number of a particular type. For
+  // types that don't exist in a particular region, this will return a result
+  // that isn't so useful; it is recommended that you use
+  // GetSupportedTypesForRegion() or GetSupportedTypesForNonGeoEntity()
+  // respectively before calling this method to determine whether you should
+  // call it for this number at all.
+  //
+  // This provides a more lenient check than IsValidNumber() in the following
+  // sense:
+  //
+  //   1. It only checks the length of phone numbers. In particular, it doesn't
+  //      check starting digits of the number.
+  //   2. For some numbers (particularly fixed-line), many regions have the
+  //      concept of area code, which together with subscriber number constitute
+  //      the national significant number. It is sometimes okay to dial only the
+  //      subscriber number when dialing in the same area. This function will
+  //      return IS_POSSIBLE_LOCAL_ONLY if the subscriber-number-only version is
+  //      passed in. On the other hand, because IsValidNumber() validates using
+  //      information on both starting digits (for fixed line numbers, that
+  //      would most likely be area codes) and length (obviously includes the
+  //      length of area codes for fixed line numbers), it will return false for
+  //      the subscriber-number-only version.
+  ValidationResult IsPossibleNumberForTypeWithReason(
+      const PhoneNumber& number, PhoneNumberType type) const;
+
+  // Convenience wrapper around IsPossibleNumberForTypeWithReason(). Instead of
+  // returning the reason for failure, this method returns true if the number is
+  // either a possible fully-qualified number (containing the area code and
+  // country code), or if the number could be a possible local number (with a
+  // country code, but missing an area code). Local numbers are considered
+  // possible if they could be possibly dialled in this format: if the area code
+  // is needed for a call to connect, the number is not considered possible
+  // without it.
+  bool IsPossibleNumberForType(const PhoneNumber& number,
+                               PhoneNumberType type) const;
 
   // Checks whether a phone number is a possible number given a number in the
   // form of a string, and the country where the number could be dialed from.
@@ -561,9 +645,9 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
   // if it thinks this is a vanity number of the type "1800 MICROSOFT".
   //
   // This method will return an error if the number is not considered to be a
-  // possible number, and NO_PARSING_ERROR if it parsed correctly.
-  // Note that validation of whether the number is actually a valid number for a
-  // particular region is not performed. This can be done separately with
+  // possible number, and NO_PARSING_ERROR if it is parsed correctly.
+  // Note that validation of whether the number is actually a valid number for
+  // a particular region is not performed. This can be done separately with
   // IsValidNumber().
   //
   // number_to_parse can also be provided in RFC3966 format.
@@ -577,8 +661,8 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
   //
   // Returns an error if the string is not considered to be a viable phone
   // number (e.g.too few or too many digits) or if no default region was
-  // supplied and the number is not in international format (does not
-  // start with +).
+  // supplied and the number is not in international format (does not start with
+  // +).
   ErrorType Parse(const string& number_to_parse,
                   const string& default_region,
                   PhoneNumber* number) const;
@@ -645,9 +729,6 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
   // country is Italy.
   bool IsLeadingZeroPossible(int country_calling_code) const;
 
-  bool IsNumberPossibleForDesc(const string& national_number,
-                               const PhoneNumberDesc& number_desc) const;
-
   bool IsNumberMatchingDesc(const string& national_number,
                             const PhoneNumberDesc& number_desc) const;
 
@@ -663,7 +744,7 @@ class PhoneNumberUtil : public Singleton<PhoneNumberUtil> {
   static const size_t kMinLengthForNsn = 2;
   // The ITU says the maximum length should be 15, but we have found longer
   // numbers in Germany.
-  static const size_t kMaxLengthForNsn = 16;
+  static const size_t kMaxLengthForNsn = 17;
   // The maximum length of the country calling code.
   static const size_t kMaxLengthCountryCode = 3;
 

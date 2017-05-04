@@ -62,17 +62,6 @@ class PhoneNumberUtilTest : public testing::Test {
     return phone_util_.GetMetadataForNonGeographicalRegion(country_code);
   }
 
-  void GetSupportedRegions(set<string>* regions) {
-    phone_util_.GetSupportedRegions(regions);
-  }
-
-  void GetRegionCodesForCountryCallingCode(
-      int country_calling_code,
-      list<string>* regions) {
-    phone_util_.GetRegionCodesForCountryCallingCode(country_calling_code,
-                                                    regions);
-  }
-
   void ExtractPossibleNumber(const string& number,
                              string* extracted_number) const {
     phone_util_.ExtractPossibleNumber(number, extracted_number);
@@ -88,10 +77,6 @@ class PhoneNumberUtilTest : public testing::Test {
 
   void Normalize(string* number) const {
     phone_util_.Normalize(number);
-  }
-
-  void NormalizeDiallableCharsOnly(string* number) const {
-    phone_util_.NormalizeDiallableCharsOnly(number);
   }
 
   bool IsNumberGeographical(const PhoneNumber& phone_number) const {
@@ -136,14 +121,6 @@ class PhoneNumberUtilTest : public testing::Test {
     return phone_util_.ContainsOnlyValidDigits(s);
   }
 
-  void GetNddPrefixForRegion(const string& region,
-                             bool strip_non_digits,
-                             string* ndd_prefix) const {
-    // For testing purposes, we check this is empty first.
-    ndd_prefix->clear();
-    phone_util_.GetNddPrefixForRegion(region, strip_non_digits, ndd_prefix);
-  }
-
   const PhoneNumberUtil& phone_util_;
 
  private:
@@ -162,7 +139,7 @@ TEST_F(PhoneNumberUtilTest, ContainsOnlyValidDigits) {
 TEST_F(PhoneNumberUtilTest, GetSupportedRegions) {
   set<string> regions;
 
-  GetSupportedRegions(&regions);
+  phone_util_.GetSupportedRegions(&regions);
   EXPECT_GT(regions.size(), 0U);
 }
 
@@ -180,32 +157,69 @@ TEST_F(PhoneNumberUtilTest, GetSupportedGlobalNetworkCallingCodes) {
   }
 }
 
+TEST_F(PhoneNumberUtilTest, GetSupportedTypesForRegion) {
+  std::set<PhoneNumberUtil::PhoneNumberType> types;
+  phone_util_.GetSupportedTypesForRegion(RegionCode::BR(), &types);
+  EXPECT_NE(types.find(PhoneNumberUtil::FIXED_LINE), types.end());
+  // Our test data has no mobile numbers for Brazil.
+  EXPECT_EQ(types.find(PhoneNumberUtil::MOBILE), types.end());
+  // UNKNOWN should never be returned.
+  EXPECT_EQ(types.find(PhoneNumberUtil::UNKNOWN), types.end());
+
+  types.clear();
+  // In the US, many numbers are classified as FIXED_LINE_OR_MOBILE; but we
+  // don't want to expose this as a supported type, instead we say FIXED_LINE
+  // and MOBILE are both present.
+  phone_util_.GetSupportedTypesForRegion(RegionCode::US(), &types);
+  EXPECT_NE(types.find(PhoneNumberUtil::FIXED_LINE), types.end());
+  EXPECT_NE(types.find(PhoneNumberUtil::MOBILE), types.end());
+  EXPECT_EQ(types.find(PhoneNumberUtil::FIXED_LINE_OR_MOBILE), types.end());
+  types.clear();
+  phone_util_.GetSupportedTypesForRegion(RegionCode::ZZ(), &types);
+  // Test the invalid region code.
+  EXPECT_EQ(0, types.size());
+}
+
+TEST_F(PhoneNumberUtilTest, GetSupportedTypesForNonGeoEntity) {
+  std::set<PhoneNumberUtil::PhoneNumberType> types;
+  // No data exists for 999 at all, no types should be returned.
+  phone_util_.GetSupportedTypesForNonGeoEntity(999, &types);
+  EXPECT_EQ(0, types.size());
+
+  types.clear();
+  phone_util_.GetSupportedTypesForNonGeoEntity(979, &types);
+  EXPECT_NE(types.find(PhoneNumberUtil::PREMIUM_RATE), types.end());
+  EXPECT_EQ(types.find(PhoneNumberUtil::MOBILE), types.end());
+  EXPECT_EQ(types.find(PhoneNumberUtil::UNKNOWN), types.end());
+}
+
 TEST_F(PhoneNumberUtilTest, GetRegionCodesForCountryCallingCode) {
   list<string> regions;
 
-  GetRegionCodesForCountryCallingCode(1, &regions);
+  phone_util_.GetRegionCodesForCountryCallingCode(1, &regions);
   EXPECT_TRUE(find(regions.begin(), regions.end(), RegionCode::US())
               != regions.end());
   EXPECT_TRUE(find(regions.begin(), regions.end(), RegionCode::BS())
               != regions.end());
 
   regions.clear();
-  GetRegionCodesForCountryCallingCode(44, &regions);
+  phone_util_.GetRegionCodesForCountryCallingCode(44, &regions);
   EXPECT_TRUE(find(regions.begin(), regions.end(), RegionCode::GB())
               != regions.end());
 
   regions.clear();
-  GetRegionCodesForCountryCallingCode(49, &regions);
+  phone_util_.GetRegionCodesForCountryCallingCode(49, &regions);
   EXPECT_TRUE(find(regions.begin(), regions.end(), RegionCode::DE())
               != regions.end());
 
   regions.clear();
-  GetRegionCodesForCountryCallingCode(800, &regions);
+  phone_util_.GetRegionCodesForCountryCallingCode(800, &regions);
   EXPECT_TRUE(find(regions.begin(), regions.end(), RegionCode::UN001())
               != regions.end());
 
   regions.clear();
-  GetRegionCodesForCountryCallingCode(kInvalidCountryCode, &regions);
+  phone_util_.GetRegionCodesForCountryCallingCode(
+      kInvalidCountryCode, &regions);
   EXPECT_TRUE(regions.empty());
 }
 
@@ -323,6 +337,26 @@ TEST_F(PhoneNumberUtilTest, GetNationalSignificantNumber) {
   EXPECT_EQ("12345678", national_significant_number);
 }
 
+TEST_F(PhoneNumberUtilTest, GetNationalSignificantNumber_ManyLeadingZeros) {
+  PhoneNumber number;
+  number.set_country_code(1);
+  number.set_national_number(650ULL);
+  number.set_italian_leading_zero(true);
+  number.set_number_of_leading_zeros(2);
+  string national_significant_number;
+  phone_util_.GetNationalSignificantNumber(number,
+                                           &national_significant_number);
+  EXPECT_EQ("00650", national_significant_number);
+
+  // Set a bad value; we shouldn't crash, we shouldn't output any leading zeros
+  // at all.
+  number.set_number_of_leading_zeros(-3);
+  national_significant_number.clear();
+  phone_util_.GetNationalSignificantNumber(number,
+                                           &national_significant_number);
+  EXPECT_EQ("650", national_significant_number);
+}
+
 TEST_F(PhoneNumberUtilTest, GetExampleNumber) {
   PhoneNumber de_number;
   de_number.set_country_code(49);
@@ -332,39 +366,41 @@ TEST_F(PhoneNumberUtilTest, GetExampleNumber) {
   EXPECT_TRUE(success);
   EXPECT_EQ(de_number, test_number);
 
-  success = phone_util_.GetExampleNumberForType(RegionCode::DE(),
-                                                PhoneNumberUtil::FIXED_LINE,
-                                                &test_number);
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::DE(), PhoneNumberUtil::FIXED_LINE, &test_number);
   EXPECT_TRUE(success);
   EXPECT_EQ(de_number, test_number);
 
-  success = phone_util_.GetExampleNumberForType(RegionCode::DE(),
-                                                PhoneNumberUtil::MOBILE,
-                                                &test_number);
-  // Here we test that an example number was not returned, and that the number
-  // passed in was not modified.
+  // Should return the same response if asked for FIXED_LINE_OR_MOBILE too.
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::DE(), PhoneNumberUtil::FIXED_LINE_OR_MOBILE, &test_number);
+  EXPECT_EQ(de_number, test_number);
+
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::DE(), PhoneNumberUtil::MOBILE, &test_number);
+  // We have data for the US, but no data for VOICEMAIL, so the number passed in
+  // should be left empty.
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::US(), PhoneNumberUtil::VOICEMAIL, &test_number);
   test_number.Clear();
   EXPECT_FALSE(success);
   EXPECT_EQ(PhoneNumber::default_instance(), test_number);
 
-  success = phone_util_.GetExampleNumberForType(RegionCode::US(),
-                                                PhoneNumberUtil::FIXED_LINE,
-                                                &test_number);
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::US(), PhoneNumberUtil::FIXED_LINE, &test_number);
   // Here we test that the call to get an example number succeeded, and that the
   // number passed in was modified.
   EXPECT_TRUE(success);
   EXPECT_NE(PhoneNumber::default_instance(), test_number);
-  success = phone_util_.GetExampleNumberForType(RegionCode::US(),
-                                                PhoneNumberUtil::MOBILE,
-                                                &test_number);
+  success = phone_util_.GetExampleNumberForType(
+      RegionCode::US(), PhoneNumberUtil::MOBILE, &test_number);
   EXPECT_TRUE(success);
   EXPECT_NE(PhoneNumber::default_instance(), test_number);
 
   // CS is an invalid region, so we have no data for it. We should return false.
   test_number.Clear();
-  EXPECT_FALSE(phone_util_.GetExampleNumberForType(RegionCode::CS(),
-                                                   PhoneNumberUtil::MOBILE,
-                                                   &test_number));
+  EXPECT_FALSE(phone_util_.GetExampleNumberForType(
+      RegionCode::CS(), PhoneNumberUtil::MOBILE, &test_number));
   EXPECT_EQ(PhoneNumber::default_instance(), test_number);
 
   // RegionCode 001 is reserved for supporting non-geographical country calling
@@ -1744,20 +1780,143 @@ TEST_F(PhoneNumberUtilTest, IsPossibleNumber) {
                                                     RegionCode::US()));
   EXPECT_TRUE(phone_util_.IsPossibleNumberForString("(650) 253-0000",
                                                     RegionCode::US()));
-  EXPECT_TRUE(phone_util_.IsPossibleNumberForString("253-0000",
-                                                    RegionCode::US()));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForString("253-0000", RegionCode::US()));
   EXPECT_TRUE(phone_util_.IsPossibleNumberForString("+1 650 253 0000",
                                                     RegionCode::GB()));
   EXPECT_TRUE(phone_util_.IsPossibleNumberForString("+44 20 7031 3000",
                                                     RegionCode::GB()));
   EXPECT_TRUE(phone_util_.IsPossibleNumberForString("(020) 7031 300",
                                                     RegionCode::GB()));
-  EXPECT_TRUE(phone_util_.IsPossibleNumberForString("7031 3000",
-                                                    RegionCode::GB()));
-  EXPECT_TRUE(phone_util_.IsPossibleNumberForString("3331 6005",
-                                                    RegionCode::NZ()));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForString("7031 3000", RegionCode::GB()));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForString("3331 6005", RegionCode::NZ()));
   EXPECT_TRUE(phone_util_.IsPossibleNumberForString("+800 1234 5678",
                                                     RegionCode::UN001()));
+}
+
+TEST_F(PhoneNumberUtilTest, IsPossibleNumberForType_DifferentTypeLengths) {
+  // We use Argentinian numbers since they have different possible lengths for
+  // different types.
+  PhoneNumber number;
+  number.set_country_code(54);
+  number.set_national_number(12345ULL);
+  // Too short for any Argentinian number, including fixed-line.
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+
+  // 6-digit numbers are okay for fixed-line.
+  number.set_national_number(123456ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  // But too short for mobile.
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  // And too short for toll-free.
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::TOLL_FREE));
+
+  // The same applies to 9-digit numbers.
+  number.set_national_number(123456789ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::TOLL_FREE));
+
+  // 10-digit numbers are universally possible.
+  number.set_national_number(1234567890ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::TOLL_FREE));
+
+  // 11-digit numbers are only possible for mobile numbers. Note we don't
+  // require the leading 9, which all mobile numbers start with, and would be
+  // required for a valid mobile number.
+  number.set_national_number(12345678901ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::TOLL_FREE));
+}
+
+TEST_F(PhoneNumberUtilTest, IsPossibleNumberForType_LocalOnly) {
+  PhoneNumber number;
+  // Here we test a number length which matches a local-only length.
+  number.set_country_code(49);
+  number.set_national_number(12ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  // Mobile numbers must be 10 or 11 digits, and there are no local-only
+  // lengths.
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+}
+
+TEST_F(PhoneNumberUtilTest, IsPossibleNumberForType_DataMissingForSizeReasons) {
+  PhoneNumber number;
+  // Here we test something where the possible lengths match the possible
+  // lengths of the country as a whole, and hence aren't present in the binary
+  // for size reasons - this should still work.
+  // Local-only number.
+  number.set_country_code(55);
+  number.set_national_number(12345678ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  number.set_national_number(1234567890ULL);
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsPossibleNumberForType_NumberTypeNotSupportedForRegion) {
+  PhoneNumber number;
+  // There are *no* mobile numbers for this region at all, so we return false.
+  number.set_country_code(55);
+  number.set_national_number(12345678L);
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  // This matches a fixed-line length though.
+  EXPECT_TRUE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_TRUE(phone_util_.IsPossibleNumberForType(
+      number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+
+  // There are *no* fixed-line OR mobile numbers for this country calling code
+  // at all, so we return false for these.
+  number.set_country_code(979);
+  number.set_national_number(123456789L);
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::MOBILE));
+  EXPECT_FALSE(
+      phone_util_.IsPossibleNumberForType(number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_FALSE(phone_util_.IsPossibleNumberForType(
+      number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+  EXPECT_TRUE(phone_util_.IsPossibleNumberForType(
+      number, PhoneNumberUtil::PREMIUM_RATE));
 }
 
 TEST_F(PhoneNumberUtilTest, IsPossibleNumberWithReason) {
@@ -1771,7 +1930,7 @@ TEST_F(PhoneNumberUtilTest, IsPossibleNumberWithReason) {
 
   number.set_country_code(1);
   number.set_national_number(2530000ULL);
-  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
             phone_util_.IsPossibleNumberWithReason(number));
 
   number.set_country_code(0);
@@ -1808,6 +1967,240 @@ TEST_F(PhoneNumberUtilTest, IsPossibleNumberWithReason) {
   number.set_national_number(123456789ULL);
   EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
             phone_util_.IsPossibleNumberWithReason(number));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsPossibleNumberForTypeWithReason_DifferentTypeLengths) {
+  // We use Argentinian numbers since they have different possible lengths for
+  // different types.
+  PhoneNumber number;
+  number.set_country_code(54);
+  number.set_national_number(12345ULL);
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+
+  // 6-digit numbers are okay for fixed-line.
+  number.set_national_number(123456ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  // But too short for mobile.
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  // And too short for toll-free.
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::TOLL_FREE));
+  // The same applies to 9-digit numbers.
+  number.set_national_number(123456789ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::TOLL_FREE));
+  // 10-digit numbers are universally possible.
+  number.set_national_number(1234567890ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::TOLL_FREE));
+  // 11-digit numbers are possible for mobile numbers. Note we don't require the
+  // leading 9, which all mobile numbers start with, and would be required for a
+  // valid mobile number.
+  number.set_national_number(12345678901ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::TOLL_FREE));
+}
+
+TEST_F(PhoneNumberUtilTest, IsPossibleNumberForTypeWithReason_LocalOnly) {
+  PhoneNumber number;
+  // Here we test a number length which matches a local-only length.
+  number.set_country_code(49);
+  number.set_national_number(12ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  // Mobile numbers must be 10 or 11 digits, and there are no local-only
+  // lengths.
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsPossibleNumberForTypeWithReason_DataMissingForSizeReasons) {
+  PhoneNumber number;
+  // Here we test something where the possible lengths match the possible
+  // lengths of the country as a whole, and hence aren't present in the binary
+  // for size reasons - this should still work.
+  // Local-only number.
+  number.set_country_code(55);
+  number.set_national_number(12345678ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  // Normal-length number.
+  number.set_national_number(1234567890ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::UNKNOWN));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsPossibleNumberForTypeWithReason_NumberTypeNotSupportedForRegion) {
+  PhoneNumber number;
+  // There are *no* mobile numbers for this region at all, so we return
+  // INVALID_LENGTH.
+  number.set_country_code(55);
+  number.set_national_number(12345678ULL);
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  // This matches a fixed-line length though.
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE_LOCAL_ONLY,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+  // This is too short for fixed-line, and no mobile numbers exist.
+  number.set_national_number(1234567ULL);
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  // This is too short for mobile, and no fixed-line number exist.
+  number.set_country_code(882);
+  number.set_national_number(1234567ULL);
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+
+  // There are *no* fixed-line OR mobile numbers for this country calling code
+  // at all, so we return INVALID_LENGTH.
+  number.set_country_code(979);
+  number.set_national_number(123456789ULL);
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::PREMIUM_RATE));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsPossibleNumberForTypeWithReason_FixedLineOrMobile) {
+  PhoneNumber number;
+  // For FIXED_LINE_OR_MOBILE, a number should be considered valid if it matches
+  // the possible lengths for mobile *or* fixed-line numbers.
+  number.set_country_code(290);
+  number.set_national_number(1234ULL);
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+
+  number.set_national_number(12345ULL);
+  EXPECT_EQ(PhoneNumberUtil::TOO_SHORT,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::INVALID_LENGTH,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+
+  number.set_national_number(123456ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+
+  number.set_national_number(1234567ULL);
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::MOBILE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
+
+  number.set_national_number(12345678ULL);
+  EXPECT_EQ(PhoneNumberUtil::IS_POSSIBLE,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::TOLL_FREE));
+  EXPECT_EQ(PhoneNumberUtil::TOO_LONG,
+            phone_util_.IsPossibleNumberForTypeWithReason(
+                number, PhoneNumberUtil::FIXED_LINE_OR_MOBILE));
 }
 
 TEST_F(PhoneNumberUtilTest, IsNotPossibleNumber) {
@@ -1919,7 +2312,8 @@ TEST_F(PhoneNumberUtilTest, IsNumberGeographical) {
 
   number.set_country_code(800);
   number.set_national_number(12345678ULL);
-  EXPECT_FALSE(IsNumberGeographical(number));  // Internation toll free number.
+  EXPECT_FALSE(IsNumberGeographical(number));  // International toll free
+                                               // number.
 
   // We test that mobile phone numbers in relevant regions are indeed considered
   // geographical.
@@ -2377,33 +2771,41 @@ TEST_F(PhoneNumberUtilTest, GetCountryCodeForRegion) {
 
 TEST_F(PhoneNumberUtilTest, GetNationalDiallingPrefixForRegion) {
   string ndd_prefix;
-  GetNddPrefixForRegion(RegionCode::US(), false, &ndd_prefix);
+  phone_util_.GetNddPrefixForRegion(RegionCode::US(), false, &ndd_prefix);
   EXPECT_EQ("1", ndd_prefix);
 
   // Test non-main country to see it gets the national dialling prefix for the
   // main country with that country calling code.
-  GetNddPrefixForRegion(RegionCode::BS(), false, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::BS(), false, &ndd_prefix);
   EXPECT_EQ("1", ndd_prefix);
 
-  GetNddPrefixForRegion(RegionCode::NZ(), false, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::NZ(), false, &ndd_prefix);
   EXPECT_EQ("0", ndd_prefix);
 
+  ndd_prefix.clear();
   // Test case with non digit in the national prefix.
-  GetNddPrefixForRegion(RegionCode::AO(), false, &ndd_prefix);
+  phone_util_.GetNddPrefixForRegion(RegionCode::AO(), false, &ndd_prefix);
   EXPECT_EQ("0~0", ndd_prefix);
 
-  GetNddPrefixForRegion(RegionCode::AO(), true, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::AO(), true, &ndd_prefix);
   EXPECT_EQ("00", ndd_prefix);
 
   // Test cases with invalid regions.
-  GetNddPrefixForRegion(RegionCode::GetUnknown(), false, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::GetUnknown(), false,
+                                    &ndd_prefix);
   EXPECT_EQ("", ndd_prefix);
 
-  GetNddPrefixForRegion(RegionCode::UN001(), false, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::UN001(), false, &ndd_prefix);
   EXPECT_EQ("", ndd_prefix);
 
   // CS is already deprecated so the library doesn't support it.
-  GetNddPrefixForRegion(RegionCode::CS(), false, &ndd_prefix);
+  ndd_prefix.clear();
+  phone_util_.GetNddPrefixForRegion(RegionCode::CS(), false, &ndd_prefix);
   EXPECT_EQ("", ndd_prefix);
 }
 
@@ -2496,7 +2898,7 @@ TEST_F(PhoneNumberUtilTest, NormaliseStripAlphaCharacters) {
 
 TEST_F(PhoneNumberUtilTest, NormaliseStripNonDiallableCharacters) {
   string input_number("03*4-56&+1a#234");
-  NormalizeDiallableCharsOnly(&input_number);
+  phone_util_.NormalizeDiallableCharsOnly(&input_number);
   static const string kExpectedOutput("03*456+1#234");
   EXPECT_EQ(kExpectedOutput, input_number)
       << "Conversion did not correctly remove non-diallable characters";
@@ -2850,7 +3252,72 @@ TEST_F(PhoneNumberUtilTest, IsNumberMatchMatches) {
   nz_number_2.set_national_number(33316005ULL);
   EXPECT_EQ(PhoneNumberUtil::EXACT_MATCH,
             phone_util_.IsNumberMatch(nz_number, nz_number_2));
+}
 
+TEST_F(PhoneNumberUtilTest, IsNumberMatchShortMatchIfDiffNumLeadingZeros) {
+  PhoneNumber nz_number_one;
+  nz_number_one.set_country_code(64);
+  nz_number_one.set_national_number(33316005ULL);
+  nz_number_one.set_italian_leading_zero(true);
+
+  PhoneNumber nz_number_two;
+  nz_number_two.set_country_code(64);
+  nz_number_two.set_national_number(33316005ULL);
+  nz_number_two.set_italian_leading_zero(true);
+  nz_number_two.set_number_of_leading_zeros(2);
+
+  EXPECT_EQ(PhoneNumberUtil::SHORT_NSN_MATCH,
+            phone_util_.IsNumberMatch(nz_number_one, nz_number_two));
+
+  nz_number_one.set_italian_leading_zero(false);
+  nz_number_one.set_number_of_leading_zeros(1);
+  nz_number_two.set_italian_leading_zero(true);
+  nz_number_two.set_number_of_leading_zeros(1);
+  // Since one doesn't have the "italian_leading_zero" set to true, we ignore
+  // the number of leading zeros present (1 is in any case the default value).
+  EXPECT_EQ(PhoneNumberUtil::SHORT_NSN_MATCH,
+            phone_util_.IsNumberMatch(nz_number_one, nz_number_two));
+}
+
+TEST_F(PhoneNumberUtilTest, IsNumberMatchAcceptsProtoDefaultsAsMatch) {
+  PhoneNumber nz_number_one;
+  nz_number_one.set_country_code(64);
+  nz_number_one.set_national_number(33316005ULL);
+  nz_number_one.set_italian_leading_zero(true);
+
+  PhoneNumber nz_number_two;
+  nz_number_two.set_country_code(64);
+  nz_number_two.set_national_number(33316005ULL);
+  nz_number_two.set_italian_leading_zero(true);
+  // The default for number_of_leading_zeros is 1, so it shouldn't normally be
+  // set, however if it is it should be considered equivalent.
+  nz_number_two.set_number_of_leading_zeros(1);
+  EXPECT_EQ(PhoneNumberUtil::EXACT_MATCH,
+            phone_util_.IsNumberMatch(nz_number_one, nz_number_two));
+}
+
+TEST_F(PhoneNumberUtilTest,
+       IsNumberMatchMatchesDiffLeadingZerosIfItalianLeadingZeroFalse) {
+  PhoneNumber nz_number_one;
+  nz_number_one.set_country_code(64);
+  nz_number_one.set_national_number(33316005ULL);
+
+  PhoneNumber nz_number_two;
+  nz_number_two.set_country_code(64);
+  nz_number_two.set_national_number(33316005ULL);
+  // The default for number_of_leading_zeros is 1, so it shouldn't normally be
+  // set, however if it is it should be considered equivalent.
+  nz_number_two.set_number_of_leading_zeros(1);
+  EXPECT_EQ(PhoneNumberUtil::EXACT_MATCH,
+            phone_util_.IsNumberMatch(nz_number_one, nz_number_two));
+  // Even if it is set to ten, it is still equivalent because in both cases
+  // italian_leading_zero is not true.
+  nz_number_two.set_number_of_leading_zeros(10);
+  EXPECT_EQ(PhoneNumberUtil::EXACT_MATCH,
+            phone_util_.IsNumberMatch(nz_number_one, nz_number_two));
+}
+
+TEST_F(PhoneNumberUtilTest, IsNumberMatchIgnoresSomeFields) {
   // Check raw_input, country_code_source and preferred_domestic_carrier_code
   // are ignored.
   PhoneNumber br_number_1;
@@ -3554,6 +4021,12 @@ TEST_F(PhoneNumberUtilTest, FailedParseOnInvalidNumbers) {
   // This should not succeed in being parsed.
   EXPECT_EQ(PhoneNumberUtil::INVALID_COUNTRY_CODE_ERROR,
             phone_util_.Parse("tel:555-1234;phone-context=1-331",
+                              RegionCode::ZZ(), &test_number));
+  EXPECT_EQ(PhoneNumber::default_instance(), test_number);
+
+  // Only the phone-context symbol is present, but no data.
+  EXPECT_EQ(PhoneNumberUtil::NOT_A_NUMBER,
+            phone_util_.Parse(";phone-context=",
                               RegionCode::ZZ(), &test_number));
   EXPECT_EQ(PhoneNumber::default_instance(), test_number);
 }
