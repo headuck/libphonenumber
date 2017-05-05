@@ -281,9 +281,25 @@ public class PhoneNumberUtilLite {
      * Possible outcomes when testing if a PhoneNumber is possible.
      */
     public enum ValidationResult {
+        /** The number length matches that of valid numbers for this region. */
         IS_POSSIBLE,
+        /**
+         * The number length matches that of local numbers for this region only (i.e. numbers that may
+         * be able to be dialled within an area, but do not have all the information to be dialled from
+         * anywhere inside or outside the country).
+         */
+        // IS_POSSIBLE_LOCAL_ONLY,
+        /** The number has an invalid country calling code. */
         INVALID_COUNTRY_CODE,
+        /** The number is shorter than all valid numbers for this region. */
         TOO_SHORT,
+        /**
+         * The number is longer than the shortest valid numbers for this region, shorter than the
+         * longest valid numbers for this region, and does not itself have a number length that matches
+         * valid numbers for this region.
+         */
+        INVALID_LENGTH,
+        /** The number is longer than all valid numbers for this region. */
         TOO_LONG,
     }
 
@@ -432,7 +448,7 @@ public class PhoneNumberUtilLite {
      * @param number  a string of characters representing a phone number
      * @return        the normalized string version of the phone number
      */
-    static String normalizeDiallableCharsOnly(String number) {
+    public static String normalizeDiallableCharsOnly(String number) {
         return normalizeHelper(number, DIALLABLE_CHAR_MAPPINGS, true /* remove non matches */);
     }
 
@@ -604,7 +620,7 @@ public class PhoneNumberUtilLite {
     public String getNationalSignificantNumber(PhoneNumber number) {
         // If leading zero(s) have been set, we prefix this now. Note this is not a national prefix.
         StringBuilder nationalNumber = new StringBuilder();
-        if (number.isItalianLeadingZero()) {
+        if (number.isItalianLeadingZero() && number.getNumberOfLeadingZeros() > 0) {
             char[] zeros = new char[number.getNumberOfLeadingZeros()];
             Arrays.fill(zeros, '0');
             nationalNumber.append(new String(zeros));
@@ -776,7 +792,8 @@ public class PhoneNumberUtilLite {
 
     /**
      * Returns the region where a phone number is from. This could be used for geocoding at the region
-     * level.
+     * level. Only guarantees correct results for valid, full numbers (not short-codes, or invalid
+     * numbers).
      *
      * @param number  the phone number whose origin we want to know
      * @return  the region where the phone number is from, or null if no region matches this calling
@@ -892,12 +909,18 @@ public class PhoneNumberUtilLite {
 
     /**
      * Convenience wrapper around {@link #isPossibleNumberWithReason}. Instead of returning the reason
-     * for failure, this method returns a boolean value.
+     * for failure, this method returns true if the number is either a possible fully-qualified number
+     * (containing the area code and country code), or if the number could be a possible local number
+     * (with a country code, but missing an area code). Local numbers are considered possible if they
+     * could be possibly dialled in this format: if the area code is needed for a call to connect, the
+     * number is not considered possible without it.
+     *
      * @param number  the number that needs to be checked
      * @return  true if the number is possible
      */
     public boolean isPossibleNumber(PhoneNumber number) {
-        return isPossibleNumberWithReason(number) == ValidationResult.IS_POSSIBLE;
+        ValidationResult result = isPossibleNumberWithReason(number);
+        return result == ValidationResult.IS_POSSIBLE;
     }
 
     /**
@@ -909,16 +932,18 @@ public class PhoneNumberUtilLite {
     private ValidationResult testNumberLength(int possibleNumberLengths, String number) {
         int len = number.length();
         if (len >= 30) return ValidationResult.TOO_LONG;
-        
+        if (len == 0) return ValidationResult.TOO_SHORT;
         int lenMask = 1 << len;
         if ((lenMask & possibleNumberLengths) > 0) {
             return ValidationResult.IS_POSSIBLE;
         }
         if (lenMask > possibleNumberLengths) {
             return ValidationResult.TOO_LONG;
-        } else {
+        } else if (((lenMask * 2 - 1) & possibleNumberLengths) == 0) {
             return ValidationResult.TOO_SHORT;
         }
+        return ValidationResult.INVALID_LENGTH;
+
     }
 
     /**
@@ -1365,6 +1390,9 @@ public class PhoneNumberUtilLite {
      * parse() method, with the exception that it allows the default region to be null, for use by
      * isNumberMatch(). checkRegion should be set to false if it is permitted for the default region
      * to be null or unknown ("ZZ").
+     *
+     * Note if any new field is added to this method that should always be filled in, even when
+     * keepRawInput is false, it should also be handled in the copyCoreFieldsOnly() method.
      */
     private void parseHelper(String numberToParse, String defaultRegion, boolean keepRawInput,
                              boolean checkRegion, PhoneNumber phoneNumber)
