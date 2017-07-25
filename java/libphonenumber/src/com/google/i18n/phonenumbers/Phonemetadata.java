@@ -211,9 +211,6 @@ public final class Phonemetadata {
         if (other.hasNationalNumberPattern()) {
           setNationalNumberPattern(other.getNationalNumberPattern());
         }
-        if (other.hasPossibleNumberPattern()) {
-          setPossibleNumberPattern(other.getPossibleNumberPattern());
-        }
         for (int i = 0; i < other.getPossibleLengthCount(); i++) {
           addPossibleLength(other.getPossibleLength(i));
         }
@@ -244,22 +241,6 @@ public final class Phonemetadata {
     public PhoneNumberDesc clearNationalNumberPattern() {
       hasNationalNumberPattern = false;
       nationalNumberPattern_ = "";
-      return this;
-    }
-
-    // optional string possible_number_pattern = 3;
-    private boolean hasPossibleNumberPattern;
-    private String possibleNumberPattern_ = "";
-    public boolean hasPossibleNumberPattern() { return hasPossibleNumberPattern; }
-    public String getPossibleNumberPattern() { return possibleNumberPattern_; }
-    public PhoneNumberDesc setPossibleNumberPattern(String value) {
-      hasPossibleNumberPattern = true;
-      possibleNumberPattern_ = value;
-      return this;
-    }
-    public PhoneNumberDesc clearPossibleNumberPattern() {
-      hasPossibleNumberPattern = false;
-      possibleNumberPattern_ = "";
       return this;
     }
 
@@ -317,7 +298,6 @@ public final class Phonemetadata {
 
     public boolean exactlySameAs(PhoneNumberDesc other) {
       return nationalNumberPattern_.equals(other.nationalNumberPattern_) &&
-          possibleNumberPattern_.equals(other.possibleNumberPattern_) &&
           possibleLength_.equals(other.possibleLength_) &&
           possibleLengthLocalOnly_.equals(other.possibleLengthLocalOnly_) &&
           exampleNumber_.equals(other.exampleNumber_);
@@ -327,11 +307,6 @@ public final class Phonemetadata {
       objectOutput.writeBoolean(hasNationalNumberPattern);
       if (hasNationalNumberPattern) {
         objectOutput.writeUTF(nationalNumberPattern_);
-      }
-
-      objectOutput.writeBoolean(hasPossibleNumberPattern);
-      if (hasPossibleNumberPattern) {
-        objectOutput.writeUTF(possibleNumberPattern_);
       }
 
       int possibleLengthSize = getPossibleLengthCount();
@@ -355,10 +330,6 @@ public final class Phonemetadata {
     public void readExternal(ObjectInput objectInput) throws IOException {
       if (objectInput.readBoolean()) {
         setNationalNumberPattern(objectInput.readUTF());
-      }
-
-      if (objectInput.readBoolean()) {
-        setPossibleNumberPattern(objectInput.readUTF());
       }
 
       int possibleLengthSize = objectInput.readInt();
@@ -602,6 +573,20 @@ public final class Phonemetadata {
       }
       hasCarrierSpecific = true;
       carrierSpecific_ = value;
+      return this;
+    }
+
+    // optional PhoneNumberDesc sms_services = 33;
+    private boolean hasSmsServices;
+    private PhoneNumberDesc smsServices_ = null;
+    public boolean hasSmsServices() { return hasSmsServices; }
+    public PhoneNumberDesc getSmsServices() { return smsServices_; }
+    public PhoneMetadata setSmsServices(PhoneNumberDesc value) {
+      if (value == null) {
+        throw new NullPointerException();
+      }
+      hasSmsServices = true;
+      smsServices_ = value;
       return this;
     }
 
@@ -906,6 +891,10 @@ public final class Phonemetadata {
       if (hasCarrierSpecific) {
         carrierSpecific_.writeExternal(objectOutput);
       }
+      objectOutput.writeBoolean(hasSmsServices);
+      if (hasSmsServices) {
+        smsServices_.writeExternal(objectOutput);
+      }
       objectOutput.writeBoolean(hasNoInternationalDialling);
       if (hasNoInternationalDialling) {
         noInternationalDialling_.writeExternal(objectOutput);
@@ -1056,6 +1045,12 @@ public final class Phonemetadata {
         PhoneNumberDesc desc = new PhoneNumberDesc();
         desc.readExternal(objectInput);
         setCarrierSpecific(desc);
+      }
+      hasDesc = objectInput.readBoolean();
+      if (hasDesc) {
+        PhoneNumberDesc desc = new PhoneNumberDesc();
+        desc.readExternal(objectInput);
+        setSmsServices(desc);
       }
       hasDesc = objectInput.readBoolean();
       if (hasDesc) {

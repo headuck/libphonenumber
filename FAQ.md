@@ -17,6 +17,60 @@ If you know that your numbers are always in the form &lt;country calling
 code&gt;&lt;national significant number&gt;, it is safe to put a "+" in front to
 indicate this to the library.
 
+### Why does the library treat some non-digit characters as digits?
+
+When parsing, the library does its best to extract a phone number out of the
+given input string. It looks for the phone number in the provided text; it
+doesn't aim to verify whether the string is *only* a phone number.
+
+If the input looks like a vanity number to the library, `parse()` assumes this
+is intentional and converts alpha characters to digits. Please read the
+documentation for `PhoneNumber parse(String, String)` in
+[PhoneNumberUtil](http://github.com/googlei18n/libphonenumber/blob/master/java/libphonenumber/src/com/google/i18n/phonenumbers/PhoneNumberUtil.java)
+for details. Also see `Iterable<PhoneNumberMatch> findNumbers(CharSequence,
+String)`.
+
+Some examples:
+
+*   `+1 412 535 abcd` is parsed the same as `+1 412 535 2223`.
+
+*   If someone fat-fingers and adds an extra alpha character in the *middle*,
+    then the library assumes this was a mistake and fixes it. E.g. the extra `c`
+    in `+1 412 535 c0000` is ignored, and this is parsed the same as `+1 412 535
+    0000`.
+
+*   If someone fat-fingers and *replaces* a digit in the middle with an alpha
+    character, and the remaining characters do not make up a valid number, this
+    alpha character is not converted and the resulting number is invalid, e.g.
+    with `+1 412 535 c000`.
+
+Other examples, in reports:
+
+*   [#328](http://github.com/googlei18n/libphonenumber/issues/328)
+*   [#1001](http://github.com/googlei18n/libphonenumber/issues/1001)
+*   [#1199](http://github.com/googlei18n/libphonenumber/issues/1199)
+*   [#1813](http://github.com/googlei18n/libphonenumber/issues/1813)
+
+### Why wasn't the national prefix removed when parsing?
+
+Usually, when parsing, we remove a country's national or trunk prefix, so we can
+store a normalized form of the number. This is usually, but not always, a
+leading zero. In some situations, we don't remove this, but instead keep it as
+part of the national number:
+
+1.  If a country does not use a national prefix, or does not use one anymore, we
+    don't remove a leading zero, since then if the user wanted to format the
+    number we would never know to prefix it with this leading zero.
+1.  If the leading zero is not a national prefix but is needed for dialling from
+    abroad (e.g. in the case of Italy) it is stored in the proto, not removed as
+    a national prefix.
+1.  If the number is too short to be a valid phone number in this country, we do
+    not remove the national prefix. For instance, although `0` is a national
+    prefix in Australia, we do not remove it from the number `000` which is the
+    emergency number; if we did we would not know that it needs a `0` re-added
+    when formatting since other short-codes do not, and we would be irreparably
+    changing the phone number.
+
 ## Validation and types of numbers
 
 ### What is the difference between isPossibleNumber and isValidNumber?
@@ -106,8 +160,8 @@ call or send an SMS to.
 M2M numbers would violate this assumption and we'd have to evaluate the
 consequences for existing APIs and clients if M2M numbers would be considered
 valid by the library. Clients of libphonenumber expect `mobile` and `fixed-line`
-numbers to have certain affordances, such as: Reachable for voice calls 
-(and for mobile also SMS) as well as assuming standard cost. This expectation 
+numbers to have certain affordances, such as: Reachable for voice calls
+(and for mobile also SMS) as well as assuming standard cost. This expectation
 is broken by the lack of M2M standardization today.
 
 Many people use this library for formatting the numbers of their contacts, for
@@ -211,28 +265,51 @@ to achieve this, please do so. Thanks!
 ### Why is this number from Argentina (AR) or Mexico (MX) not identified as the right number type?
 
 Certain countries' mobile and/or fixed line ranges may overlap, which may make
-accurate identification impossible without additional and explicit context
-such as a mobile prefix. We rely on this prefix being present to correctly identify
-the phone number type (rather than returning ['FIXED_LINE_OR_MOBILE'](#fixed_line_or_mobile)
-in ambiguous cases) until our metadata can be fine-grained enough to detect when a user has omitted it.
+accurate identification impossible without additional and explicit context such
+as a mobile prefix. We rely on this prefix being present to correctly identify
+the phone number type (rather than returning
+[`FIXED_LINE_OR_MOBILE`](#fixed_line_or_mobile) in ambiguous cases) until our
+metadata can be fine-grained enough to detect when a user has omitted it.
 
-For example, when calling a mobile line from a fixed line in Argentina,
-you need to dial 15 before the subscriber number, or 9 if you're calling
-from another country. Without these additional digits, your call may not
-connect at all!
+For example, when calling a mobile line from a fixed line in Argentina, you need
+to dial 15 before the subscriber number, or 9 if you're calling from another
+country. Without these additional digits, your call may not connect at all!
 
 Similarly, Mexico has different mobile prefixes needed when calling from a fixed
 line such as 044 when calling locally, 045 when calling from another state, and
 1 when dialing from another country.
 
-Moreover, these countries have different possible lengths for area codes and subscriber
-numbers depending on the city, which further complicate matters (e.g. Buenos Aires is 11
-followed by eight digits, but Río Gallegos is 2966 followed by six digits).
+Moreover, these countries have different possible lengths for area codes and
+subscriber numbers depending on the city, which further complicate matters (e.g.
+Buenos Aires is 11 followed by eight digits, but Río Gallegos is 2966 followed
+by six digits).
 
-Despite all the aforementioned complexity, users may not provide their phone number
-with all the additional context unless explicitly asked. For instance,
-since SMS messages can be sent in Argentina from a mobile phone without a prefix,
-the user may not supply the mobile prefix.
+Despite all the aforementioned complexity, users may not provide their phone
+number with all the additional context unless explicitly asked. For instance,
+since SMS messages can be sent in Argentina from a mobile phone without a
+prefix, the user may not supply the mobile prefix.
+
+We are aware of these issues but fixing them is not trivial. In the meantime, we
+recommend the following workarounds to support affected users.
+
+*   If you know an Argentina or Mexico number is mobile (e.g. if you're doing
+    signups with device numbers or will send them an SMS verification code),
+    follow these steps:
+    *   For raw input strings:
+        *   Parse a raw input string into a `PhoneNumber` and follow the next
+            instructions for `PhoneNumber` objects.
+    *   For `PhoneNumber` objects:
+        *   Check that the library validates a `PhoneNumber` as mobile, by
+            calling `getNumberType`;
+        *   If not, format it in national format and prepend a `9` for Argentina
+            or a `1` for Mexico;
+        *   Parse the modified string and if the library validates it as mobile,
+            accept the resulting `PhoneNumber` as canonical.
+*   Consider prompting for type (mobile or not) in the phone number input UI.
+
+IMPORTANT: Do not add a leading 1 or 9 for displaying or formatting the numbers.
+Depending on the use case, other tokens may be needed. The library will do the
+right thing if the phone number object is as intended.
 
 ### Why are Bouvet Island (BV), Pitcairn Island (PN), Antarctica (AQ) etc. not supported?
 

@@ -18,7 +18,7 @@ cmake_minimum_required (VERSION 2.8)
 
 project (libphonenumber)
 set (libphonenumber_VERSION_MAJOR 8)
-set (libphonenumber_VERSION_MINOR 4)
+set (libphonenumber_VERSION_MINOR 7)
 
 # Helper functions dealing with finding libraries and programs this library
 # depends on.
@@ -459,6 +459,7 @@ endif ()
 set (TEST_SOURCES
   "test/phonenumbers/asyoutypeformatter_test.cc"
   "test/phonenumbers/logger_test.cc"
+  "test/phonenumbers/matcher_test.cc"
   "test/phonenumbers/phonenumberutil_test.cc"
   "test/phonenumbers/regexp_adapter_test.cc"
   "test/phonenumbers/regexp_cache_test.cc"
@@ -524,6 +525,7 @@ install (FILES
   "src/phonenumbers/phonenumberutil.h"
   "src/phonenumbers/regexp_adapter.h"
   "src/phonenumbers/regexp_cache.h"
+  "src/phonenumbers/region_code.h"
   "src/phonenumbers/shortnumberinfo.h"
   "src/phonenumbers/unicodestring.h"
   DESTINATION include/phonenumbers/
@@ -566,6 +568,7 @@ install (FILES
 )
 
 install (FILES "src/phonenumbers/base/synchronization/lock.h"
+         "src/phonenumbers/base/synchronization/lock_posix.h"
          DESTINATION include/phonenumbers/base/synchronization/)
 
 install (TARGETS phonenumber LIBRARY DESTINATION lib/ ARCHIVE DESTINATION lib/)
