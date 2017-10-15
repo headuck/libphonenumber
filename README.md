@@ -30,7 +30,7 @@ Cream Sandwich).
     Cost, VoIP, Personal Numbers, UAN, Pager, and Voicemail (whenever feasible).
 *   `isNumberMatch` - gets a confidence level on whether two numbers could be
     the same.
-*   `getExampleNumber` and `getExampleNumberByType` - provide valid example
+*   `getExampleNumber` and `getExampleNumberForType` - provide valid example
     numbers for all countries/regions, with the option of specifying which type
     of example phone number is needed.
 *   `isPossibleNumber` - quickly guesses whether a number is a possible
@@ -55,7 +55,7 @@ Cream Sandwich).
 The [Java demo](http://libphonenumber.appspot.com/) is updated with a slight
 delay after the GitHub release.
 
-Last demo update: v8.7.0.
+Last demo update: v8.8.3.
 
 If this number is lower than the [latest release's version
 number](http://github.com/googlei18n/libphonenumber/releases), we are between
@@ -217,15 +217,28 @@ However, we emphasize that these ports are by developers outside the
 libphonenumber project. We do not evaluate their quality or influence their
 maintenance processes.
 
-*   C#: https://github.com/aidanbebbington/libphonenumber-csharp
-*   Javascript: If you don't want to use our version, which depends on Closure,
-    there are several other options, including
-    https://github.com/halt-hammerzeit/libphonenumber-js (a stripped-down
-    rewrite, about 110 KB in size) and https://github.com/seegno/google-libphonenumber
-    (a browserify-compatible wrapper around the original unmodified library
-    installable via npm, packs Google Closure library, about 420 KB in size)
+*   C#: https://github.com/twcclegg/libphonenumber-csharp
 *   Objective-c: https://github.com/iziz/libPhoneNumber-iOS
 *   PHP: https://github.com/giggsey/libphonenumber-for-php
 *   PostgreSQL in-database types: https://github.com/blm768/pg-libphonenumber
 *   Python: https://github.com/daviddrysdale/python-phonenumbers
 *   Ruby: https://github.com/mobi/telephone_number
+
+Alternatives to our own versions:
+
+*   Android-optimized: Our Java version loads the metadata from
+    `Class#getResourcesAsStream` and asks that Android apps follow the Android
+    loading best practices of repackaging the metadata and loading from
+    `AssetManager#open()` themselves
+    ([FAQ](https://github.com/googlei18n/libphonenumber/blob/master/FAQ.md#optimize-loads)).
+    If you don't want to do this, check out the port at
+    https://github.com/MichaelRocks/libphonenumber-android, which does repackage
+    the metadata and use `AssetManager#open()`, and may be depended on without
+    needing those specific loading optimizations from clients.
+*   Javascript: If you don't want to use our version, which depends on Closure,
+    there are several other options, including
+    https://github.com/halt-hammerzeit/libphonenumber-js - a stripped-down
+    rewrite, about 110 KB in size - and
+    https://github.com/seegno/google-libphonenumber - a browserify-compatible
+    wrapper around the original unmodified library installable via npm, which
+    packs the Google Closure library, about 420 KB in size.
