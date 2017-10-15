@@ -558,7 +558,7 @@ public class BuildMetadataSimplifiedFromXml extends Command {
         }
         */
         // optional bool same_mobile_and_fixed_line_pattern = 18 [default=false];
-        if (metadata.isSameMobileAndFixedLinePattern()) {
+        if (metadata.getSameMobileAndFixedLinePattern()) {
           // jsArrayBuilder.append(1);
             ret |= FLAG_SAME_MOBILE_FIXED;
         } else {
