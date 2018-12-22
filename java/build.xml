@@ -17,6 +17,7 @@
   <property name="report.dir" value="${build.dir}/junitreport"/>
   <property name="resources.dir" value="../resources"/>
   <property name="javascript.dir" value="../javascript"/>
+  <property name="bootclasspath" value="/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/rt.jar"/>
   <property name="build.tools.jar"
       value="../tools/java/java-build/target/java-build-1.0-SNAPSHOT-jar-with-dependencies.jar"/>
 
@@ -193,9 +194,10 @@
   <target name="compile" description="Compile Java source."
           depends="build-phone-metadata,build-short-metadata,build-alternate-metadata,build-carrier-data,build-geo-data,build-timezones-data,build-simplified-metadata">
     <mkdir dir="${classes.dir}"/>
-    <javac srcdir="${libphonenumber.src.dir};${carrier.src.dir};${geocoder.src.dir};${prefixmapper.src.dir};${libphonelite.src.dir}"
+<!-- Note: source, target and bootclasspath needed to hold back java at 1.6 -->
+    <javac source="1.6" target="1.6" bootclasspath="${bootclasspath}" srcdir="${libphonenumber.src.dir};${carrier.src.dir};${geocoder.src.dir};${prefixmapper.src.dir};${libphonelite.src.dir}"
            destdir="${classes.dir}" classpathref="classpath" includeAntRuntime="false" encoding="UTF-8"/>
-    <javac srcdir="${libphonenumber.test.dir};${carrier.test.dir};${geocoder.test.dir};${prefixmapper.test.dir}"
+    <javac source="1.6" target="1.6" bootclasspath="${bootclasspath}" srcdir="${libphonenumber.test.dir};${carrier.test.dir};${geocoder.test.dir};${prefixmapper.test.dir}"
            destdir="${classes.dir}" classpathref="classpath" debug="on"
            includeAntRuntime="false"/>
   </target>
