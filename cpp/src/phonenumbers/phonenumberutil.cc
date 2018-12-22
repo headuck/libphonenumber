@@ -14,9 +14,9 @@
 
 #include "phonenumbers/phonenumberutil.h"
 
-#include <string.h>
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <iterator>
 #include <map>
 #include <utility>
@@ -51,6 +51,7 @@ namespace i18n {
 namespace phonenumbers {
 
 using google::protobuf::RepeatedField;
+using gtl::OrderByFirst;
 
 // static constants
 const size_t PhoneNumberUtil::kMinLengthForNsn;
@@ -226,7 +227,7 @@ string CreateExtnPattern(const string& single_extn_symbols) {
           "[:\\.．]?[  \\t,-]*", capturing_extn_digits, "#?|" */
       "[ \xC2\xA0\\t,]*(?:e?xt(?:ensi(?:o\xCC\x81?|\xC3\xB3))?n?|"
       "(?:\xEF\xBD\x85)?\xEF\xBD\x98\xEF\xBD\x94(?:\xEF\xBD\x8E)?|"
-      "[", single_extn_symbols, "]|int|"
+      "\xD0\xB4\xD0\xBE\xD0\xB1|[", single_extn_symbols, "]|int|"
       "\xEF\xBD\x89\xEF\xBD\x8E\xEF\xBD\x94|anexo)"
       "[:\\.\xEF\xBC\x8E]?[ \xC2\xA0\\t,-]*", capturing_extn_digits,
       "#?|[- ]+([", kDigits, "]{1,5})#"));
@@ -298,7 +299,7 @@ void GetSupportedTypesForMetadata(
     const PhoneMetadata& metadata,
     std::set<PhoneNumberUtil::PhoneNumberType>* types) {
   DCHECK(types);
-  for (int i = 0; i < static_cast<int>(PhoneNumberUtil::kMaxNumberType); ++i) {
+  for (int i = 0; i <= static_cast<int>(PhoneNumberUtil::kMaxNumberType); ++i) {
     PhoneNumberUtil::PhoneNumberType type =
         static_cast<PhoneNumberUtil::PhoneNumberType>(i);
     if (type == PhoneNumberUtil::FIXED_LINE_OR_MOBILE ||
@@ -808,7 +809,7 @@ PhoneNumberUtil::PhoneNumberUtil()
 }
 
 PhoneNumberUtil::~PhoneNumberUtil() {
-  STLDeleteContainerPairSecondPointers(
+  gtl::STLDeleteContainerPairSecondPointers(
       country_calling_code_to_region_code_map_->begin(),
       country_calling_code_to_region_code_map_->end());
 }
@@ -1226,9 +1227,9 @@ void PhoneNumberUtil::FormatNumberForMobileDialing(
         Format(number_no_extension, NATIONAL, formatted_number);
       }
     } else {
-      // For non-geographical countries, and Mexican and Chilean fixed line and
-      // mobile numbers, we output international format for numbers that can be
-      // dialed internationally as that always works.
+      // For non-geographical countries, and Mexican, Chilean and Uzbek fixed
+      // line and mobile numbers, we output international format for numbers
+      // that can be dialed internationally as that always works.
       if ((region_code == kRegionCodeForNonGeoEntity ||
            // MX fixed line and mobile numbers should always be formatted in
            // international format, even when dialed within MX. For national
@@ -1241,8 +1242,15 @@ void PhoneNumberUtil::FormatNumberForMobileDialing(
            // national format, but don't have it when used for display. The
            // reverse is true for mobile numbers. As a result, we output them in
            // the international format to make it work.
+	   // UZ mobile and fixed-line numbers have to be formatted in
+           // international format or prefixed with special codes like 03, 04
+           // (for fixed-line) and 05 (for mobile) for dialling successfully
+           // from mobile devices. As we do not have complete information on
+           // special codes and to be consistent with formatting across all
+           // phone types we return the number in international format here.
            ((region_code == "MX" ||
-             region_code == "CL") &&
+             region_code == "CL" ||
+             region_code == "UZ") &&
             is_fixed_line_or_mobile)) &&
           CanBeInternationallyDialled(number_no_extension)) {
         Format(number_no_extension, INTERNATIONAL, formatted_number);
@@ -1418,8 +1426,14 @@ void PhoneNumberUtil::FormatInOriginalFormat(const PhoneNumber& number,
       // We assume that the first-group symbol will never be _before_ the
       // national prefix.
       if (!candidate_national_prefix_rule.empty()) {
-        candidate_national_prefix_rule.erase(
-            candidate_national_prefix_rule.find("$1"));
+        size_t index_of_first_group = candidate_national_prefix_rule.find("$1");
+        if (index_of_first_group == string::npos) {
+          LOG(ERROR) << "First group missing in national prefix rule: "
+              << candidate_national_prefix_rule;
+          Format(number, NATIONAL, formatted_number);
+          break;
+        }
+        candidate_national_prefix_rule.erase(index_of_first_group);
         NormalizeDigitsOnly(&candidate_national_prefix_rule);
       }
       if (candidate_national_prefix_rule.empty()) {

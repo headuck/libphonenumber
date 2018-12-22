@@ -123,11 +123,16 @@ with varying standardization practices in different regions.
 
 #### But my dialled number connected, so isn't it valid?
 
-Not necessarily. In some countries extra digits at the end are ignored. For
-example, dialling `1800 MICROSOFT` in the US connects to `+1 (800) MIC-ROSO`.
-Moreover, during renumbering transitions, e.g. when all numbers are getting an
-extra `9` added to the front, some carriers will "fix" old numbers long after
-they're no longer working for the majority.
+Not necessarily.
+
+*   In some countries extra digits at the end are ignored. For example, dialling
+    `1800 MICROSOFT` in the US connects to `+1 (800) MIC-ROSO`.
+*   During renumbering transitions, e.g. when all numbers are getting an extra
+    `9` added to the front, some operators will "fix" old numbers long after
+    they're no longer working for the majority.
+*   Numbers that are only locally-diallable e.g. a 7-digit number dialled in the
+    US are not valid, because without the rest of the number it is impossible
+    for the library to canonicalize this.
 
 ### When should I use isValidNumberForRegion?
 
@@ -190,8 +195,8 @@ a number in an advert, etc. We don't think the lack of M2M support hinders any
 of those use-case, but we might be wrong.
 
 If you would like libphonenumber to support M2M numbers, please engage with the
-developer community at [Support M2M numbers #680](
-https://github.com/googlei18n/libphonenumber/issues/680) with further
+developer community at [Support M2M numbers](
+https://issuetracker.google.com/issues/74493346) with further
 information to address our questions and concerns such as:
 
 *   **How to implement support?** e.g. new category, new library or method
@@ -201,15 +206,20 @@ information to address our questions and concerns such as:
 
 More information and collabortation on this issue would be very welcomed!
 
-Related issues: [Support M2M numbers #680](https://github.com/googlei18n/libphonenumber/issues/680),
-[#930: JTGlobal - an MNO based in the UK](https://github.com/googlei18n/libphonenumber/issues/930),
-[#976: Norway](https://github.com/googlei18n/libphonenumber/issues/976),
-[#985: South Africa, Vodacom](https://github.com/googlei18n/libphonenumber/issues/985),
-[#910: Sweden](https://github.com/googlei18n/libphonenumber/issues/910),
-[#657: Canada](https://github.com/googlei18n/libphonenumber/issues/657),
-[#550: Belgium](https://github.com/googlei18n/libphonenumber/issues/550),
-[#351: Norway](https://github.com/googlei18n/libphonenumber/issues/351),
-[#332: Netherlands](https://github.com/googlei18n/libphonenumber/issues/332)
+### What about numbers that are only valid for a set of subscribers?
+
+There are some numbers that only work for the subcribers of certain operators
+for special operator-specific services. These differ from carrierSpecific since
+they're not shortcodes. We don't support these numbers due to their limited use
+scope, few examples (only the [area code 700](https://en.wikipedia.org/wiki/Area_code_700)
+in the US), and lack of authoritative evidence.
+
+Until there are more examples with authoritative evidence and a proposal on how
+the library should handle these numbers, we won't be able to support these
+similar to our prerequisites for supporting M2M.
+
+Please see [this issue](https://issuetracker.google.com/issues/65238929) for more
+context, and file a new issue if you're able to provide more information than this.
 
 ## Representation
 
@@ -232,6 +242,29 @@ formatted) for a French user is undefined and wrong.
 It is true that in some countries phone numbers are typically written using
 native, not ASCII, digits; our phone number library supports parsing these but
 doesn't support it at formatting time at the moment.
+
+### When does formatting in a country change?
+
+The formatting within a country changes sparingly, but may be announced explicitly
+or noted implicitly in a national numbering plan update that introduces a new number
+length, number type, or other significant change. This may include the grouping and
+punctuation used (e.g. parentheses versus hyphens).
+
+In the event of lack of evidence and/or enforcement by a central government
+regulatory or telecommunication authority, we'll stick with the status quo
+since the community prefers to bias towards stability and avoid flip-flopping
+between formats over time. If the silent majority becomes vocal to support
+new formatting with authoritative evidence, then we'll collaborate with
+community stakeholders on a transition.
+
+An example of this is the shift from using parentheses to hyphens to separate
+area codes within North America. Hyphens may indicate that the area code is
+optional in local circumstances, but this is shifting to become mandatory
+in areas that have had more area code splits. However, the usage of
+parentheses persists and both methods are acceptable.
+
+See [issue #1996](https://github.com/googlei18n/libphonenumber/issues/1996)
+for some additional discussion.
 
 ### Why does formatNumberForMobileDialing return an empty string for my number?
 

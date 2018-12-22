@@ -1,4 +1,4 @@
-# Copyright (C) 2013 The Libphonenumber Authors
+# Copyright (C) 2018 The Libphonenumber Authors
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,28 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-67615|U-Call
-67616|U-Call
-67617|U-Call
-67618|U-Call
-67619|U-Call
-67646|U-Call
-67649|U-Call
-67653|U-Call
-67654|U-Call
-67655|U-Call
-67656|U-Call
-67657|U-Call
-67658|U-Call
-67659|U-Call
-67663|U-Call
-67664|U-Call
-67665|U-Call
-67666|U-Call
-67667|U-Call
-67668|U-Call
-67669|U-Call
-67675|U-Call
-67676|U-Call
-67677|U-Call
-67678|U-Call
+3822|Danilovgad/Kolasin/Podgorica
+38230|Bar/Ulcinj
+38231|Herceg Novi
+38232|Kotor/Tivat
+38233|Budva
+38240|Niksic/Pluzine/Savnik
+38241|Cetinje
+38250|Bijelo Polje/Mojkovac
+38251|Andrijevica/Berane/Blue/Gusinje/Petnitsa/Rožaje
+38252|Pljevlja/Zabljak
