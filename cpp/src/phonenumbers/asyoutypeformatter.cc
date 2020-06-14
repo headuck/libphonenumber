@@ -211,9 +211,11 @@ void AsYouTypeFormatter::NarrowDownPossibleFormats(
       ++it;
       continue;
     }
-    int last_leading_digits_pattern =
-        std::min(index_of_leading_digits_pattern,
-                 format.leading_digits_pattern_size() - 1);
+    // We don't use std::min because there is stange symbol conflict
+    // with including <windows.h> and protobuf symbols
+    int last_leading_digits_pattern = format.leading_digits_pattern_size() - 1;
+    if (last_leading_digits_pattern > index_of_leading_digits_pattern)
+      last_leading_digits_pattern = index_of_leading_digits_pattern;
     const scoped_ptr<RegExpInput> input(
         regexp_factory_->CreateInput(leading_digits));
     if (!regexp_cache_.GetRegExp(format.leading_digits_pattern().Get(
@@ -479,8 +481,24 @@ void AsYouTypeFormatter::AttemptToFormatAccruedDigits(
       DCHECK(status);
       IGNORE_UNUSED(status);
 
-      AppendNationalNumber(formatted_number, formatted_result);
-      return;
+      string full_output(*formatted_result);
+      // Check that we didn't remove nor add any extra digits when we matched
+      // this formatting pattern. This usually happens after we entered the last
+      // digit during AYTF. Eg: In case of MX, we swallow mobile token (1) when
+      // formatted but AYTF should retain all the number entered and not change
+      // in order to match a format (of same leading digits and length) display
+      // in that way.
+      AppendNationalNumber(formatted_number, &full_output);
+      phone_util_.NormalizeDiallableCharsOnly(&full_output);
+      string accrued_input_without_formatting_stdstring;
+      accrued_input_without_formatting_.toUTF8String(
+          accrued_input_without_formatting_stdstring);
+      if (full_output == accrued_input_without_formatting_stdstring) {
+        // If it's the same (i.e entered number and format is same), then it's
+        // safe to return this in formatted number as nothing is lost / added.
+        AppendNationalNumber(formatted_number, formatted_result);
+        return;
+      }
     }
   }
 }

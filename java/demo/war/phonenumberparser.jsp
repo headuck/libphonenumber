@@ -33,7 +33,7 @@
       <input type="submit" value="Submit">
       <input type="reset" value="Reset">
       <p></p>
-      <a href="https://github.com/googlei18n/libphonenumber/">Back to libphonenumber</a>
+      <a href="https://github.com/google/libphonenumber/">Back to libphonenumber</a>
     </form>
     <h2>Phone Number Parser Lite Demo</h2>
     <form action="/phonenumberparserlite" method="post" accept-charset="UTF-8"

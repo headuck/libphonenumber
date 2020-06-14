@@ -26,6 +26,10 @@
 22507|Orange
 22508|Orange
 22509|Orange
+225208|Moov
+225218|Moov
+225228|Moov
+225238|Moov
 22540|Moov
 22541|Moov
 22542|Moov
@@ -54,6 +58,7 @@
 22567|Orange
 22568|Orange
 22569|Aircom
+22570|Moov
 22571|Moov
 22572|Moov
 22573|Moov
@@ -69,3 +74,5 @@
 22587|Orange
 22588|Orange
 22589|Orange
+22595|MTN
+22597|Orange
